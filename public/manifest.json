@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "name": "BrainGYM - منظومة إدارة المركز التعليمي",
+  "short_name": "BrainGYM",
+  "description": "منظومة BrainGYM التعليمية الشاملة لإدارة المراكز والطلاب والمالية والحضور والغياب والتقييمات",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["education", "productivity", "management"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
