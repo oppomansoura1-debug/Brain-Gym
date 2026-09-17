@@ -6,6 +6,7 @@ import {
   Teacher, 
   AcademicStage, 
   Subject, 
+  EducationalGroup,
   FinancialTransaction, 
   AttendanceRecord, 
   StudentAssessment, 
@@ -21,6 +22,7 @@ import {
   INITIAL_TEACHERS, 
   INITIAL_STAGES, 
   INITIAL_SUBJECTS, 
+  INITIAL_GROUPS,
   INITIAL_TRANSACTIONS, 
   INITIAL_ATTENDANCE, 
   INITIAL_ASSESSMENTS, 
@@ -29,6 +31,38 @@ import {
   INITIAL_AUDIT_LOGS
 } from './data/initialData';
 import { getBackupHistoryLogs } from './services/securityBackup';
+import { 
+  testConnection,
+  subscribeTeachers,
+  saveTeacherToCloud,
+  deleteTeacherFromCloud,
+  subscribeStudents,
+  saveStudentToCloud,
+  deleteStudentFromCloud,
+  subscribeGroups,
+  saveGroupToCloud,
+  deleteGroupFromCloud,
+  subscribeStages,
+  saveStageToCloud,
+  deleteStageFromCloud,
+  subscribeSubjects,
+  saveSubjectToCloud,
+  deleteSubjectFromCloud,
+  subscribeTransactions,
+  saveTransactionToCloud,
+  deleteTransactionFromCloud,
+  subscribeAttendance,
+  saveAttendanceToCloud,
+  subscribeAssessments,
+  saveAssessmentToCloud,
+  subscribeSettings,
+  saveSettingsToCloud,
+  subscribeUsers,
+  saveUserToCloud,
+  deleteUserFromCloud,
+  forceManualFullSync
+} from './services/firebaseSync';
+import { Check, AlertCircle } from 'lucide-react';
 
 // UI Components
 import { Header } from './components/Header';
@@ -43,6 +77,7 @@ import { UsersManagementModal } from './components/UsersManagementModal';
 import { AdminDashboardView } from './views/AdminDashboardView';
 import { StudentsManagementView } from './views/StudentsManagementView';
 import { TeachersManagementView } from './views/TeachersManagementView';
+import { GroupsManagementView } from './views/GroupsManagementView';
 import { StagesAndSubjectsView } from './views/StagesAndSubjectsView';
 import { FinancialView } from './views/FinancialView';
 import { AttendanceView } from './views/AttendanceView';
@@ -132,12 +167,47 @@ export default function App() {
 
   const [stages, setStages] = useState<AcademicStage[]>(() => {
     const saved = localStorage.getItem('educenter_stages');
-    return saved ? JSON.parse(saved) : INITIAL_STAGES;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // If user has old cache with fewer than 15 stages or missing mainStage field, upgrade to INITIAL_STAGES
+        if (Array.isArray(parsed) && parsed.length >= 15 && parsed[0]?.mainStage) {
+          return parsed;
+        }
+      } catch {
+        // fallback to INITIAL_STAGES
+      }
+    }
+    return INITIAL_STAGES;
   });
 
   const [subjects, setSubjects] = useState<Subject[]>(() => {
     const saved = localStorage.getItem('educenter_subjects');
-    return saved ? JSON.parse(saved) : INITIAL_SUBJECTS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Upgrade if saved cache has fewer than 20 subjects or lacks mainStage
+        if (Array.isArray(parsed) && parsed.length >= 20 && parsed[0]?.mainStage) {
+          return parsed;
+        }
+      } catch {
+        // fallback
+      }
+    }
+    return INITIAL_SUBJECTS;
+  });
+
+  const [groups, setGroups] = useState<EducationalGroup[]>(() => {
+    const saved = localStorage.getItem('educenter_groups');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // fallback
+      }
+    }
+    return INITIAL_GROUPS;
   });
 
   const [transactions, setTransactions] = useState<FinancialTransaction[]>(() => {
@@ -168,8 +238,10 @@ export default function App() {
         return {
           ...INITIAL_SETTINGS,
           ...parsed,
-          vodafoneCashWallet: '01007041700',
-          fawryMerchantCode: '01007041700',
+          address: 'المنصورة ش الاديب متفرع من ش الترعه',
+          phone: '01110168237',
+          vodafoneCashWallet: '01110168237',
+          fawryMerchantCode: '01110168237',
         };
       } catch {
         return INITIAL_SETTINGS;
@@ -189,7 +261,142 @@ export default function App() {
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showUsersModal, setShowUsersModal] = useState(false);
 
-  // Local storage persistence
+  // Manual Cloud Sync State
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [syncToast, setSyncToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const result = await forceManualFullSync({
+        students,
+        teachers,
+        groups,
+        stages,
+        subjects,
+        transactions,
+        attendanceRecords,
+        assessments,
+        centerSettings,
+        users,
+      });
+
+      setLastSyncTime(result.timestamp);
+      setSyncToast({
+        type: 'success',
+        message: result.message
+      });
+
+      // Add system notification for confirmation
+      const notif: SystemNotification = {
+        id: `sync_${Date.now()}`,
+        title: 'مزامنة وتأكيد سحابي فوري',
+        message: `تم التحقق بنجاح وحفظ كافة البيانات في السحابة (${result.totalSynced} عنصر).`,
+        type: 'system_info',
+        targetRole: 'all',
+        timestamp: result.timestamp,
+        read: false,
+      };
+      setNotifications(prev => [notif, ...prev]);
+
+      setTimeout(() => {
+        setSyncToast(null);
+      }, 4500);
+    } catch (err: any) {
+      console.error('Manual sync error:', err);
+      setSyncToast({
+        type: 'error',
+        message: 'تعذر إتمام المزامنة السحابية. يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.'
+      });
+      setTimeout(() => {
+        setSyncToast(null);
+      }, 5000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Real-time Cloud Synchronization with Firebase Firestore
+  useEffect(() => {
+    testConnection();
+
+    const unsubTeachers = subscribeTeachers((cloudTeachers) => {
+      if (cloudTeachers && cloudTeachers.length > 0) {
+        setTeachers(cloudTeachers);
+      }
+    }, INITIAL_TEACHERS);
+
+    const unsubStudents = subscribeStudents((cloudStudents) => {
+      if (cloudStudents && cloudStudents.length > 0) {
+        setStudents(cloudStudents);
+      }
+    }, INITIAL_STUDENTS);
+
+    const unsubGroups = subscribeGroups((cloudGroups) => {
+      if (cloudGroups && cloudGroups.length > 0) {
+        setGroups(cloudGroups);
+      }
+    }, INITIAL_GROUPS);
+
+    const unsubStages = subscribeStages((cloudStages) => {
+      if (cloudStages && cloudStages.length > 0) {
+        setStages(cloudStages);
+      }
+    }, INITIAL_STAGES);
+
+    const unsubSubjects = subscribeSubjects((cloudSubjects) => {
+      if (cloudSubjects && cloudSubjects.length > 0) {
+        setSubjects(cloudSubjects);
+      }
+    }, INITIAL_SUBJECTS);
+
+    const unsubTransactions = subscribeTransactions((cloudTxns) => {
+      if (cloudTxns && cloudTxns.length > 0) {
+        setTransactions(cloudTxns);
+      }
+    }, INITIAL_TRANSACTIONS);
+
+    const unsubAttendance = subscribeAttendance((cloudAtt) => {
+      if (cloudAtt && cloudAtt.length > 0) {
+        setAttendanceRecords(cloudAtt);
+      }
+    }, INITIAL_ATTENDANCE);
+
+    const unsubAssessments = subscribeAssessments((cloudAss) => {
+      if (cloudAss && cloudAss.length > 0) {
+        setAssessments(cloudAss);
+      }
+    }, INITIAL_ASSESSMENTS);
+
+    const unsubSettings = subscribeSettings((cloudSettings) => {
+      if (cloudSettings) {
+        setCenterSettings(cloudSettings);
+      }
+    }, INITIAL_SETTINGS);
+
+    const unsubUsers = subscribeUsers((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        setUsers(cloudUsers);
+      }
+    }, INITIAL_USERS);
+
+    return () => {
+      unsubTeachers();
+      unsubStudents();
+      unsubGroups();
+      unsubStages();
+      unsubSubjects();
+      unsubTransactions();
+      unsubAttendance();
+      unsubAssessments();
+      unsubSettings();
+      unsubUsers();
+    };
+  }, []);
+
+  // Offline cache backup
   useEffect(() => {
     localStorage.setItem('educenter_students', JSON.stringify(students));
   }, [students]);
@@ -205,6 +412,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('educenter_subjects', JSON.stringify(subjects));
   }, [subjects]);
+
+  useEffect(() => {
+    localStorage.setItem('educenter_groups', JSON.stringify(groups));
+  }, [groups]);
 
   useEffect(() => {
     localStorage.setItem('educenter_transactions', JSON.stringify(transactions));
@@ -242,7 +453,8 @@ export default function App() {
 
   // Student Handlers
   const handleAddStudent = (newStudent: Student) => {
-    setStudents(prev => [newStudent, ...prev]);
+    saveStudentToCloud(newStudent).catch(console.error);
+    setStudents(prev => [newStudent, ...prev.filter(s => s.id !== newStudent.id)]);
 
     // Add notification
     const notif: SystemNotification = {
@@ -259,10 +471,12 @@ export default function App() {
   };
 
   const handleUpdateStudent = (updatedStudent: Student) => {
+    saveStudentToCloud(updatedStudent).catch(console.error);
     setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
   };
 
   const handleDeleteStudent = (studentId: string) => {
+    deleteStudentFromCloud(studentId).catch(console.error);
     setStudents(prev => prev.filter(s => s.id !== studentId));
   };
 
@@ -275,16 +489,19 @@ export default function App() {
 
   // Payment completed
   const handlePaymentSuccess = (newTxn: FinancialTransaction) => {
-    setTransactions(prev => [newTxn, ...prev]);
+    saveTransactionToCloud(newTxn).catch(console.error);
+    setTransactions(prev => [newTxn, ...prev.filter(t => t.id !== newTxn.id)]);
 
     // If payment belongs to a student, clear or credit their balance
     if (newTxn.studentId) {
       setStudents(prev => prev.map(std => {
         if (std.id === newTxn.studentId) {
-          return {
+          const updated = {
             ...std,
             balance: Math.min(0, std.balance + newTxn.amount), // settle balance
           };
+          saveStudentToCloud(updated).catch(console.error);
+          return updated;
         }
         return std;
       }));
@@ -310,24 +527,201 @@ export default function App() {
 
   // Teacher Handlers
   const handleAddTeacher = (teacher: Teacher) => {
-    setTeachers(prev => [teacher, ...prev]);
+    saveTeacherToCloud(teacher).catch(console.error);
+    setTeachers(prev => [teacher, ...prev.filter(t => t.id !== teacher.id)]);
   };
 
   const handleUpdateTeacher = (teacher: Teacher) => {
+    saveTeacherToCloud(teacher).catch(console.error);
     setTeachers(prev => prev.map(t => t.id === teacher.id ? teacher : t));
   };
 
   const handleDeleteTeacher = (teacherId: string) => {
+    deleteTeacherFromCloud(teacherId).catch(console.error);
     setTeachers(prev => prev.filter(t => t.id !== teacherId));
+  };
+
+  // Group Handlers & Student Subject Enrollment
+  const handleAddGroup = (group: EducationalGroup, initialStudentIds?: string[]) => {
+    saveGroupToCloud(group).catch(console.error);
+    setGroups(prev => [group, ...prev.filter(g => g.id !== group.id)]);
+
+    // If initial students are enrolled in this group/subject, update their profiles
+    if (initialStudentIds && initialStudentIds.length > 0) {
+      setStudents(prev => prev.map(std => {
+        if (initialStudentIds.includes(std.id)) {
+          const currentGroups = std.enrolledGroupIds || [];
+          const currentSubs = std.enrolledSubjectIds || [];
+          const updatedStd = {
+            ...std,
+            groupName: group.name,
+            enrolledGroupIds: Array.from(new Set([...currentGroups, group.id])),
+            enrolledSubjectIds: Array.from(new Set([...currentSubs, group.subjectId])),
+          };
+          saveStudentToCloud(updatedStd).catch(console.error);
+          return updatedStd;
+        }
+        return std;
+      }));
+    }
+
+    const audit: AuditLog = {
+      id: `aud_${Date.now()}`,
+      action: 'إنشاء مجموعة تعليمية جديدة',
+      user: currentUser?.name || 'المدير العام',
+      role: 'admin',
+      details: `تم إنشاء المجموعة (${group.name}) لمادة (${group.subjectName}) وتعيين المعلم (${group.teacherName})`,
+      timestamp: new Date().toLocaleString('ar-EG'),
+      ipAddress: '192.168.1.1'
+    };
+    setAuditLogs(prev => [audit, ...prev]);
+  };
+
+  const handleUpdateGroup = (group: EducationalGroup) => {
+    saveGroupToCloud(group).catch(console.error);
+    setGroups(prev => prev.map(g => g.id === group.id ? group : g));
+  };
+
+  const handleDeleteGroup = (groupId: string) => {
+    deleteGroupFromCloud(groupId).catch(console.error);
+    const grp = groups.find(g => g.id === groupId);
+    setGroups(prev => prev.filter(g => g.id !== groupId));
+    setStudents(prev => prev.map(s => {
+      const updated = {
+        ...s,
+        enrolledGroupIds: (s.enrolledGroupIds || []).filter(id => id !== groupId),
+      };
+      if (s.enrolledGroupIds?.includes(groupId)) {
+        saveStudentToCloud(updated).catch(console.error);
+      }
+      return updated;
+    }));
+
+    const audit: AuditLog = {
+      id: `aud_${Date.now()}`,
+      action: 'حذف مجموعة تعليمية',
+      user: currentUser?.name || 'المدير العام',
+      role: 'admin',
+      details: `تم حذف المجموعة (${grp?.name || groupId}) وإلغاء ارتباط الطلاب بها`,
+      timestamp: new Date().toLocaleString('ar-EG'),
+      ipAddress: '192.168.1.1'
+    };
+    setAuditLogs(prev => [audit, ...prev]);
+  };
+
+  const handleEnrollStudentInGroup = (groupId: string, studentId: string) => {
+    const grp = groups.find(g => g.id === groupId);
+    if (!grp) return;
+
+    // Add student ID to group
+    const updatedGroup = {
+      ...grp,
+      studentIds: Array.from(new Set([...grp.studentIds, studentId])),
+    };
+    saveGroupToCloud(updatedGroup).catch(console.error);
+    setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g));
+
+    // Update student enrolled groups and subjects
+    setStudents(prev => prev.map(std => {
+      if (std.id === studentId) {
+        const currentGroups = std.enrolledGroupIds || [];
+        const currentSubs = std.enrolledSubjectIds || [];
+        const updatedStd = {
+          ...std,
+          groupName: std.groupName || grp.name,
+          enrolledGroupIds: Array.from(new Set([...currentGroups, grp.id])),
+          enrolledSubjectIds: Array.from(new Set([...currentSubs, grp.subjectId])),
+        };
+        saveStudentToCloud(updatedStd).catch(console.error);
+        return updatedStd;
+      }
+      return std;
+    }));
+
+    const std = students.find(s => s.id === studentId);
+    const audit: AuditLog = {
+      id: `aud_${Date.now()}`,
+      action: 'تسجيل طالب في مادة تعليمية',
+      user: currentUser?.name || 'المدير العام',
+      role: 'admin',
+      details: `تم تسجيل الطالب (${std?.name || studentId}) في مادة (${grp.subjectName}) بالمجموعة (${grp.name})`,
+      timestamp: new Date().toLocaleString('ar-EG'),
+      ipAddress: '192.168.1.1'
+    };
+    setAuditLogs(prev => [audit, ...prev]);
+  };
+
+  const handleRemoveStudentFromGroup = (groupId: string, studentId: string) => {
+    const grp = groups.find(g => g.id === groupId);
+    if (grp) {
+      const updatedGroup = {
+        ...grp,
+        studentIds: grp.studentIds.filter(id => id !== studentId),
+      };
+      saveGroupToCloud(updatedGroup).catch(console.error);
+      setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g));
+    }
+
+    setStudents(prev => prev.map(std => {
+      if (std.id === studentId) {
+        const updatedStd = {
+          ...std,
+          enrolledGroupIds: (std.enrolledGroupIds || []).filter(id => id !== groupId),
+        };
+        saveStudentToCloud(updatedStd).catch(console.error);
+        return updatedStd;
+      }
+      return std;
+    }));
+  };
+
+  const handleAddNewStudentAndEnroll = (newStudentData: Partial<Student>, groupId: string) => {
+    const grp = groups.find(g => g.id === groupId);
+    const newStudentId = `std_${Date.now()}`;
+    const newCode = `STD-2026-${String(students.length + 1).padStart(3, '0')}`;
+
+    const newStudent: Student = {
+      id: newStudentId,
+      code: newCode,
+      name: newStudentData.name || 'طالب جديد',
+      stageId: newStudentData.stageId || grp?.stageId || stages[0]?.id || 'stage_sec_1',
+      stageName: newStudentData.stageName || grp?.stageName || stages[0]?.name || 'المرحلة الثانوية',
+      groupName: grp ? grp.name : (newStudentData.groupName || 'مجموعة عامة'),
+      phone: newStudentData.phone || '01000000000',
+      parentName: newStudentData.parentName || `ولي أمر ${newStudentData.name}`,
+      parentPhone: newStudentData.parentPhone || '01200000000',
+      enrollmentDate: new Date().toISOString().split('T')[0],
+      status: 'active',
+      monthlyFee: newStudentData.monthlyFee || grp?.monthlyFee || 300,
+      balance: 0,
+      attendanceRate: 100,
+      averageScore: 90,
+      enrolledGroupIds: grp ? [grp.id] : [],
+      enrolledSubjectIds: grp ? [grp.subjectId] : [],
+    };
+
+    saveStudentToCloud(newStudent).catch(console.error);
+    setStudents(prev => [newStudent, ...prev]);
+
+    if (grp) {
+      const updatedGroup = {
+        ...grp,
+        studentIds: Array.from(new Set([...grp.studentIds, newStudentId])),
+      };
+      saveGroupToCloud(updatedGroup).catch(console.error);
+      setGroups(prev => prev.map(g => (g.id === groupId ? updatedGroup : g)));
+    }
   };
 
   // Financial Handlers
   const handleAddTransaction = (txn: FinancialTransaction) => {
-    setTransactions(prev => [txn, ...prev]);
+    saveTransactionToCloud(txn).catch(console.error);
+    setTransactions(prev => [txn, ...prev.filter(t => t.id !== txn.id)]);
   };
 
   // Attendance Handlers
   const handleRecordAttendance = (records: AttendanceRecord[]) => {
+    records.forEach(r => saveAttendanceToCloud(r).catch(console.error));
     setAttendanceRecords(prev => [...records, ...prev]);
 
     // Update students attendance rates based on new records
@@ -336,7 +730,9 @@ export default function App() {
         setStudents(curr => curr.map(s => {
           if (s.id === rec.studentId) {
             const newRate = Math.max(40, s.attendanceRate - 5);
-            return { ...s, attendanceRate: newRate };
+            const updated = { ...s, attendanceRate: newRate };
+            saveStudentToCloud(updated).catch(console.error);
+            return updated;
           }
           return s;
         }));
@@ -361,15 +757,18 @@ export default function App() {
 
   // Assessment Handlers
   const handleAddAssessment = (assessment: StudentAssessment) => {
-    setAssessments(prev => [assessment, ...prev]);
+    saveAssessmentToCloud(assessment).catch(console.error);
+    setAssessments(prev => [assessment, ...prev.filter(a => a.id !== assessment.id)]);
 
     // Update student's averageScore
     setStudents(prev => prev.map(s => {
       if (s.id === assessment.studentId) {
-        return {
+        const updated = {
           ...s,
           averageScore: Math.round(assessment.percentage),
         };
+        saveStudentToCloud(updated).catch(console.error);
+        return updated;
       }
       return s;
     }));
@@ -390,6 +789,37 @@ export default function App() {
     }
   };
 
+  // Stages & Subjects Handlers
+  const handleAddStage = (stage: AcademicStage) => {
+    saveStageToCloud(stage).catch(console.error);
+    setStages(prev => [...prev.filter(s => s.id !== stage.id), stage]);
+  };
+
+  const handleUpdateStage = (stage: AcademicStage) => {
+    saveStageToCloud(stage).catch(console.error);
+    setStages(prev => prev.map(s => s.id === stage.id ? stage : s));
+  };
+
+  const handleDeleteStage = (stageId: string) => {
+    deleteStageFromCloud(stageId).catch(console.error);
+    setStages(prev => prev.filter(s => s.id !== stageId));
+  };
+
+  const handleAddSubject = (subject: Subject) => {
+    saveSubjectToCloud(subject).catch(console.error);
+    setSubjects(prev => [...prev.filter(s => s.id !== subject.id), subject]);
+  };
+
+  const handleUpdateSubject = (subject: Subject) => {
+    saveSubjectToCloud(subject).catch(console.error);
+    setSubjects(prev => prev.map(s => s.id === subject.id ? subject : s));
+  };
+
+  const handleDeleteSubject = (subjectId: string) => {
+    deleteSubjectFromCloud(subjectId).catch(console.error);
+    setSubjects(prev => prev.filter(s => s.id !== subjectId));
+  };
+
   // Notifications
   const handleMarkAsRead = (notifId: string) => {
     setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, read: true } : n));
@@ -401,16 +831,44 @@ export default function App() {
 
   // Encrypted Backup Restoral
   const handleRestoreBackup = (restoredData: Record<string, unknown>) => {
-    if (restoredData.students) setStudents(restoredData.students as Student[]);
-    if (restoredData.teachers) setTeachers(restoredData.teachers as Teacher[]);
-    if (restoredData.stages) setStages(restoredData.stages as AcademicStage[]);
-    if (restoredData.subjects) setSubjects(restoredData.subjects as Subject[]);
-    if (restoredData.transactions) setTransactions(restoredData.transactions as FinancialTransaction[]);
-    if (restoredData.attendanceRecords) setAttendanceRecords(restoredData.attendanceRecords as AttendanceRecord[]);
-    if (restoredData.assessments) setAssessments(restoredData.assessments as StudentAssessment[]);
+    if (restoredData.students) {
+      const stds = restoredData.students as Student[];
+      setStudents(stds);
+      stds.forEach(s => saveStudentToCloud(s).catch(console.error));
+    }
+    if (restoredData.teachers) {
+      const tchs = restoredData.teachers as Teacher[];
+      setTeachers(tchs);
+      tchs.forEach(t => saveTeacherToCloud(t).catch(console.error));
+    }
+    if (restoredData.stages) {
+      const stgs = restoredData.stages as AcademicStage[];
+      setStages(stgs);
+      stgs.forEach(stg => saveStageToCloud(stg).catch(console.error));
+    }
+    if (restoredData.subjects) {
+      const subs = restoredData.subjects as Subject[];
+      setSubjects(subs);
+      subs.forEach(sub => saveSubjectToCloud(sub).catch(console.error));
+    }
+    if (restoredData.transactions) {
+      const txns = restoredData.transactions as FinancialTransaction[];
+      setTransactions(txns);
+      txns.forEach(txn => saveTransactionToCloud(txn).catch(console.error));
+    }
+    if (restoredData.attendanceRecords) {
+      const atts = restoredData.attendanceRecords as AttendanceRecord[];
+      setAttendanceRecords(atts);
+      atts.forEach(att => saveAttendanceToCloud(att).catch(console.error));
+    }
+    if (restoredData.assessments) {
+      const asms = restoredData.assessments as StudentAssessment[];
+      setAssessments(asms);
+      asms.forEach(asm => saveAssessmentToCloud(asm).catch(console.error));
+    }
     if (restoredData.notifications) setNotifications(restoredData.notifications as SystemNotification[]);
 
-    alert('تم استعادة واستيراد النسخة الاحتياطية بنجاح وفك التشفير والتحقق من التوقيع الرقمي!');
+    alert('تم استعادة واستيراد النسخة الاحتياطية بنجاح وفك التشفير ومزامنتها سحابياً!');
   };
 
   // User Management Handlers (Admin Only)
@@ -419,6 +877,7 @@ export default function App() {
       ...newUserData,
       id: `usr_${Date.now()}`
     };
+    saveUserToCloud(newUser).catch(console.error);
     setUsers(prev => [...prev, newUser]);
 
     const audit: AuditLog = {
@@ -434,7 +893,14 @@ export default function App() {
   };
 
   const handleUpdateUser = (userId: string, updatedData: Partial<User>) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updatedData } : u));
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        const updated = { ...u, ...updatedData };
+        saveUserToCloud(updated).catch(console.error);
+        return updated;
+      }
+      return u;
+    }));
     
     // If the updated user is the current active user, update currentUser too
     if (currentUser && currentUser.id === userId) {
@@ -454,6 +920,7 @@ export default function App() {
   };
 
   const handleDeleteUser = (userId: string) => {
+    deleteUserFromCloud(userId).catch(console.error);
     setUsers(prev => prev.filter(u => u.id !== userId));
 
     const audit: AuditLog = {
@@ -502,6 +969,9 @@ export default function App() {
         onOpenBackupSecurity={() => setShowBackupModal(true)}
         onOpenUsersManagement={() => setShowUsersModal(true)}
         onLogout={handleLogout}
+        onManualSync={handleManualSync}
+        isSyncing={isSyncing}
+        lastSyncTime={lastSyncTime}
       />
 
       {/* Main Content Area */}
@@ -586,10 +1056,27 @@ export default function App() {
               <TeachersManagementView
                 teachers={teachers}
                 subjects={subjects}
+                stages={stages}
                 onAddTeacher={handleAddTeacher}
                 onUpdateTeacher={handleUpdateTeacher}
                 onDeleteTeacher={handleDeleteTeacher}
                 onRecordTeacherPayout={handleAddTransaction}
+              />
+            )}
+
+            {activeTab === 'groups' && (
+              <GroupsManagementView
+                groups={groups}
+                students={students}
+                teachers={teachers}
+                subjects={subjects}
+                stages={stages}
+                onAddGroup={handleAddGroup}
+                onUpdateGroup={handleUpdateGroup}
+                onDeleteGroup={handleDeleteGroup}
+                onEnrollStudentInGroup={handleEnrollStudentInGroup}
+                onRemoveStudentFromGroup={handleRemoveStudentFromGroup}
+                onAddNewStudentAndEnroll={handleAddNewStudentAndEnroll}
               />
             )}
 
@@ -598,8 +1085,12 @@ export default function App() {
                 stages={stages}
                 subjects={subjects}
                 teachers={teachers}
-                onAddStage={(stage) => setStages(prev => [...prev, stage])}
-                onAddSubject={(subject) => setSubjects(prev => [...prev, subject])}
+                onAddStage={handleAddStage}
+                onAddSubject={handleAddSubject}
+                onUpdateStage={handleUpdateStage}
+                onDeleteStage={handleDeleteStage}
+                onUpdateSubject={handleUpdateSubject}
+                onDeleteSubject={handleDeleteSubject}
               />
             )}
 
@@ -648,11 +1139,11 @@ export default function App() {
       <footer className="border-t border-slate-200/80 bg-white py-4 px-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800">{INITIAL_SETTINGS.centerName}</span>
+            <span className="font-bold text-slate-800">{centerSettings.centerName}</span>
             <span>•</span>
-            <span>{INITIAL_SETTINGS.address}</span>
+            <span>{centerSettings.address}</span>
             <span>•</span>
-            <span className="font-mono">{INITIAL_SETTINGS.phone}</span>
+            <span className="font-mono">{centerSettings.phone}</span>
           </div>
           <div className="flex items-center gap-3 text-slate-400">
             <span>نظام الإدارة الشامل معتمد ومشفّر</span>
@@ -719,7 +1210,10 @@ export default function App() {
           settings={centerSettings}
           auditLogs={auditLogs}
           backupLogs={backupLogs}
-          onUpdateSettings={(newSt) => setCenterSettings(newSt)}
+          onUpdateSettings={(newSt) => {
+            setCenterSettings(newSt);
+            saveSettingsToCloud(newSt).catch(console.error);
+          }}
           onRestoreState={handleRestoreBackup}
           onClose={() => setShowBackupModal(false)}
         />
@@ -736,6 +1230,28 @@ export default function App() {
           onUpdateUser={handleUpdateUser}
           onDeleteUser={handleDeleteUser}
         />
+      )}
+
+      {/* 6. Floating Sync Toast Notification */}
+      {syncToast && (
+        <div className="fixed bottom-6 left-6 z-50 animate-bounce-short flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-white/95 text-slate-800 transition-all duration-300 max-w-md">
+          <div className={`p-2 rounded-xl shrink-0 ${syncToast.type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {syncToast.type === 'success' ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          </div>
+          <div className="flex-1 text-right">
+            <h4 className="text-xs font-black text-slate-900">
+              {syncToast.type === 'success' ? 'اكتمال المزامنة السحابية' : 'تنبيه المزامنة السحابية'}
+            </h4>
+            <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{syncToast.message}</p>
+          </div>
+          <button
+            onClick={() => setSyncToast(null)}
+            className="text-slate-400 hover:text-slate-700 p-1 text-xs cursor-pointer rounded-lg hover:bg-slate-100 transition"
+            aria-label="إغلاق التنبيه"
+          >
+            ✕
+          </button>
+        </div>
       )}
 
     </div>

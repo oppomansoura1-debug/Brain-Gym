@@ -17,7 +17,10 @@ import {
   CalendarCheck,
   Award,
   LogOut,
-  UserCog
+  UserCog,
+  BookOpen,
+  RefreshCw,
+  Check
 } from 'lucide-react';
 
 export interface HeaderProps {
@@ -35,6 +38,9 @@ export interface HeaderProps {
   onOpenUsersManagement?: () => void;
   onToggleMobileMenu?: () => void;
   onLogout?: () => void;
+  onManualSync?: () => void;
+  isSyncing?: boolean;
+  lastSyncTime?: string | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,6 +58,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenUsersManagement,
   onToggleMobileMenu,
   onLogout,
+  onManualSync,
+  isSyncing = false,
+  lastSyncTime,
 }) => {
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
   const unreadNotifs = safeNotifications.filter(
@@ -70,6 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
     { id: 'students', label: 'شؤون الطلاب', icon: Users },
     { id: 'teachers', label: 'المعلمون', icon: GraduationCap },
+    { id: 'groups', label: 'المجموعات', icon: BookOpen },
     { id: 'stages', label: 'المراحل والمناهج', icon: Layers },
     { id: 'finance', label: 'المالية والخزينة', icon: DollarSign },
     { id: 'attendance', label: 'الحضور والغياب', icon: CalendarCheck },
@@ -102,9 +112,9 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-600">GYM</span>
                     <span className="text-xs font-bold text-slate-500 mr-1 hidden xs:inline">التعليمي</span>
                   </h1>
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                    <span>تشفير AES-256</span>
+                  <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>مزامنة سحابية فورية</span>
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1 hidden sm:block">
@@ -169,6 +179,28 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <UserCog className="w-4 h-4 text-indigo-600" />
                 <span className="hidden md:inline">المستخدمين والصلاحيات</span>
+              </button>
+            )}
+
+            {/* Manual Cloud Sync Button (Adjacent to Notifications) */}
+            {onManualSync && (
+              <button
+                onClick={onManualSync}
+                disabled={isSyncing}
+                className={`relative p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border shadow-xs ${
+                  isSyncing
+                    ? 'bg-amber-50 border-amber-300 text-amber-800 cursor-wait'
+                    : 'text-slate-700 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50 border-slate-200 hover:border-indigo-200'
+                }`}
+                title={lastSyncTime ? `مزامنة البيانات سحابياً (آخر مزامنة ناجحة: ${lastSyncTime})` : 'مزامنة وتأكيد حفظ أحدث البيانات في السحابة فوراً'}
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-amber-600' : 'text-indigo-600'}`} />
+                <span className="hidden sm:inline">
+                  {isSyncing ? 'جارِ المزامنة...' : 'مزامنة سحابية'}
+                </span>
+                {lastSyncTime && !isSyncing && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 hidden lg:inline-block" title="متزامن"></span>
+                )}
               </button>
             )}
 

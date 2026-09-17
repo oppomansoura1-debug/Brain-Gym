@@ -46,11 +46,9 @@ export const DataEntryPortalView: React.FC<DataEntryPortalViewProps> = ({
   // Quick enroll form
   const [stdName, setStdName] = useState('');
   const [stdStageId, setStdStageId] = useState(stages[0]?.id || '');
-  const [stdGroup, setStdGroup] = useState('مجموعة (أ)');
   const [stdPhone, setStdPhone] = useState('');
   const [parentName, setParentName] = useState('');
   const [parentPhone, setParentPhone] = useState('');
-  const [stdFee, setStdFee] = useState(1000);
   const [enrollSuccess, setEnrollSuccess] = useState(false);
 
   // Quick Expense Voucher
@@ -71,13 +69,13 @@ export const DataEntryPortalView: React.FC<DataEntryPortalViewProps> = ({
       name: stdName,
       stageId: stdStageId,
       stageName: stg ? stg.name : 'المرحلة الدراسية',
-      groupName: stdGroup,
+      groupName: 'غير مسجل بمجموعة',
       phone: stdPhone,
       parentName,
       parentPhone,
       enrollmentDate: new Date().toISOString().split('T')[0],
       status: 'active',
-      monthlyFee: Number(stdFee),
+      monthlyFee: 0,
       balance: 0,
       attendanceRate: 100,
       averageScore: 90,
@@ -225,51 +223,34 @@ export const DataEntryPortalView: React.FC<DataEntryPortalViewProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">المرحلة الدراسية:</label>
+                <label className="block font-semibold text-slate-700 mb-1">المرحلة الدراسية والصف:</label>
                 <select
                   value={stdStageId}
                   onChange={(e) => setStdStageId(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:bg-white"
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:bg-white font-medium"
                 >
-                  {stages.map(stg => (
-                    <option key={stg.id} value={stg.id}>{stg.name}</option>
+                  {Array.from(new Set(stages.map(s => s.mainStage || 'أخرى'))).map(mainCat => (
+                    <optgroup key={mainCat} label={`المرحلة: ${mainCat}`}>
+                      {stages.filter(s => (s.mainStage || 'أخرى') === mainCat).map(stg => (
+                        <option key={stg.id} value={stg.id}>
+                          {stg.grade && stg.grade !== '--' ? `${mainCat} - ${stg.grade}` : stg.name} ({stg.code})
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">المجموعة / الموعد:</label>
-                <input
-                  type="text"
-                  value={stdGroup}
-                  onChange={(e) => setStdGroup(e.target.value)}
-                  placeholder="مجموعة السبت والثلاثاء..."
-                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:bg-white"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
                 <label className="block font-semibold text-slate-700 mb-1">رقم هاتف الطالب:</label>
                 <input
-                  type="text"
+                  type="tel"
                   value={stdPhone}
                   onChange={(e) => setStdPhone(e.target.value)}
                   placeholder="010..."
                   className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:bg-white font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">الاشتراك الشهري المقدر (ج.م):</label>
-                <input
-                  type="number"
-                  value={stdFee}
-                  onChange={(e) => setStdFee(Number(e.target.value))}
-                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:bg-white font-bold text-slate-900"
                 />
               </div>
             </div>

@@ -136,14 +136,20 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
       {/* Selectors Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">المرحلة الدراسية:</label>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">المرحلة الدراسية والصف:</label>
           <select
             value={selectedStageId}
             onChange={(e) => setSelectedStageId(e.target.value)}
             className="w-full text-xs py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium"
           >
-            {stages.map(stg => (
-              <option key={stg.id} value={stg.id}>{stg.name}</option>
+            {Array.from(new Set(stages.map(s => s.mainStage || 'أخرى'))).map(mainCat => (
+              <optgroup key={mainCat} label={`المرحلة: ${mainCat}`}>
+                {stages.filter(s => (s.mainStage || 'أخرى') === mainCat).map(stg => (
+                  <option key={stg.id} value={stg.id}>
+                    {stg.grade && stg.grade !== '--' ? `${mainCat} - ${stg.grade}` : stg.name} ({stg.code})
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

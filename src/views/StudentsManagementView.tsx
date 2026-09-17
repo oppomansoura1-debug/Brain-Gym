@@ -41,22 +41,18 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   // Form State for Add / Edit
   const [formName, setFormName] = useState('');
   const [formStageId, setFormStageId] = useState(stages[0]?.id || '');
-  const [formGroupName, setFormGroupName] = useState('مجموعة النخبة (أ)');
   const [formPhone, setFormPhone] = useState('');
   const [formParentName, setFormParentName] = useState('');
   const [formParentPhone, setFormParentPhone] = useState('');
-  const [formFee, setFormFee] = useState<number>(1000);
   const [formNotes, setFormNotes] = useState('');
 
   const openAddModal = () => {
     setEditingStudent(null);
     setFormName('');
     setFormStageId(stages[0]?.id || '');
-    setFormGroupName('مجموعة النخبة (أ)');
     setFormPhone('');
     setFormParentName('');
     setFormParentPhone('');
-    setFormFee(1000);
     setFormNotes('');
     setShowAddModal(true);
   };
@@ -65,11 +61,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     setEditingStudent(std);
     setFormName(std.name);
     setFormStageId(std.stageId);
-    setFormGroupName(std.groupName);
     setFormPhone(std.phone);
     setFormParentName(std.parentName);
     setFormParentPhone(std.parentPhone);
-    setFormFee(std.monthlyFee);
     setFormNotes(std.notes || '');
     setShowAddModal(true);
   };
@@ -90,11 +84,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         name: formName,
         stageId: formStageId,
         stageName,
-        groupName: formGroupName,
         phone: formPhone,
         parentName: formParentName,
         parentPhone: formParentPhone,
-        monthlyFee: Number(formFee),
         notes: formNotes,
       };
       onUpdateStudent(updated);
@@ -105,17 +97,19 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         name: formName,
         stageId: formStageId,
         stageName,
-        groupName: formGroupName,
+        groupName: 'غير مسجل بمجموعة',
         phone: formPhone,
         parentName: formParentName,
         parentPhone: formParentPhone,
         enrollmentDate: new Date().toISOString().split('T')[0],
         status: 'active',
-        monthlyFee: Number(formFee),
+        monthlyFee: 0,
         balance: 0,
         attendanceRate: 100,
         averageScore: 90,
         notes: formNotes,
+        enrolledGroupIds: [],
+        enrolledSubjectIds: [],
       };
       onAddStudent(newStd);
     }
@@ -181,15 +175,21 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           />
         </div>
 
-        <div className="w-full md:w-64">
+        <div className="w-full md:w-72">
           <select
             value={selectedStage}
             onChange={(e) => setSelectedStage(e.target.value)}
-            className="w-full text-xs py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full text-xs py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
           >
-            <option value="all">جميع المراحل الدراسية</option>
-            {stages.map(stg => (
-              <option key={stg.id} value={stg.id}>{stg.name}</option>
+            <option value="all">جميع المراحل والصفوف ({stages.length})</option>
+            {Array.from(new Set(stages.map(s => s.mainStage || 'أخرى'))).map(mainCat => (
+              <optgroup key={mainCat} label={`المرحلة: ${mainCat}`}>
+                {stages.filter(s => (s.mainStage || 'أخرى') === mainCat).map(stg => (
+                  <option key={stg.id} value={stg.id}>
+                    {stg.grade && stg.grade !== '--' ? `${mainCat} - ${stg.grade}` : stg.name} ({stg.code})
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -202,7 +202,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
               <tr>
                 <th className="p-3.5">الطالب والكود</th>
-                <th className="p-3.5">المرحلة والمجموعة</th>
+                <th className="p-3.5">المرحلة والصف</th>
                 <th className="p-3.5">أرقام التواصل</th>
                 <th className="p-3.5">الاشتراك والوضع المالي</th>
                 <th className="p-3.5">الحضور والأداء</th>
@@ -228,8 +228,12 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
                     {/* Stage & Group */}
                     <td className="p-3.5">
-                      <div className="text-slate-800 font-medium">{std.stageName}</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">{std.groupName}</div>
+                      <div className="text-slate-800 font-semibold">{std.stageName}</div>
+                      {std.groupName && std.groupName !== 'غير مسجل بمجموعة' ? (
+                        <div className="text-[11px] text-indigo-600 font-medium mt-0.5">{std.groupName}</div>
+                      ) : (
+                        <div className="text-[11px] text-slate-400 mt-0.5">مقيد بالمركز</div>
+                      )}
                     </td>
 
                     {/* Contact & Parent */}
@@ -254,7 +258,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
                     {/* Finance */}
                     <td className="p-3.5">
-                      <div className="text-slate-900 font-semibold">{std.monthlyFee} ج.م / شهر</div>
+                      <div className="text-slate-900 font-semibold">
+                        {std.monthlyFee > 0 ? `${std.monthlyFee} ج.م / شهر` : 'حسب المواد المسجلة'}
+                      </div>
                       {std.balance < 0 ? (
                         <div className="inline-flex items-center gap-1 text-[11px] text-rose-600 font-bold mt-0.5">
                           <AlertCircle className="w-3 h-3" />
@@ -352,51 +358,34 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">المرحلة الدراسية:</label>
+                  <label className="block font-semibold text-slate-700 mb-1">المرحلة الدراسية والصف:</label>
                   <select
                     value={formStageId}
                     onChange={(e) => setFormStageId(e.target.value)}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white font-medium"
                   >
-                    {stages.map((stg) => (
-                      <option key={stg.id} value={stg.id}>{stg.name}</option>
+                    {Array.from(new Set(stages.map(s => s.mainStage || 'أخرى'))).map(mainCat => (
+                      <optgroup key={mainCat} label={`المرحلة: ${mainCat}`}>
+                        {stages.filter(s => (s.mainStage || 'أخرى') === mainCat).map(stg => (
+                          <option key={stg.id} value={stg.id}>
+                            {stg.grade && stg.grade !== '--' ? `${mainCat} - ${stg.grade}` : stg.name} ({stg.code})
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">المجموعة / الشعبة:</label>
-                  <input
-                    type="text"
-                    value={formGroupName}
-                    onChange={(e) => setFormGroupName(e.target.value)}
-                    placeholder="مثال: مجموعة النخبة (أ)"
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
                   <label className="block font-semibold text-slate-700 mb-1">هاتف الطالب الشخصي:</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={formPhone}
                     onChange={(e) => setFormPhone(e.target.value)}
                     placeholder="01012345678"
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">الاشتراك الشهري (ج.م):</label>
-                  <input
-                    type="number"
-                    value={formFee}
-                    onChange={(e) => setFormFee(Number(e.target.value))}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white font-bold"
                   />
                 </div>
               </div>

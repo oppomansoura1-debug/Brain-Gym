@@ -15,8 +15,10 @@ export interface User {
 export interface AcademicStage {
   id: string;
   name: string;
+  mainStage: string; // "المراحل الدراسية الاساسية": "-- التحضيري" | "-- القرآن" | "-- التخاطب" | "الابتدائية" | "الاعدادية" | "الثانويه"
+  grade?: string; // "الصف": "--" | "الصف الاول" | "الصف الثاني" | ...
   code: string;
-  level: 'primary' | 'preparatory' | 'secondary';
+  level: 'special' | 'kindergarten' | 'primary' | 'preparatory' | 'secondary' | string;
   academicYear: string;
   groupsCount: number;
   studentsCount: number;
@@ -28,6 +30,8 @@ export interface Subject {
   code: string;
   stageId: string;
   stageName: string;
+  mainStage?: string; // e.g. "الابتدائية" | "الاعدادية" | "الثانويه"
+  stageLevel?: 'primary' | 'preparatory' | 'secondary' | 'special' | string;
   teacherId: string;
   teacherName: string;
   monthlyFee: number;
@@ -36,6 +40,7 @@ export interface Subject {
 
 export interface Teacher {
   id: string;
+  code?: string;
   name: string;
   phone: string;
   email: string;
@@ -70,6 +75,30 @@ export interface Student {
   attendanceRate: number;
   averageScore: number;
   notes?: string;
+  enrolledGroupIds?: string[];
+  enrolledSubjectIds?: string[];
+}
+
+export interface EducationalGroup {
+  id: string;
+  name: string;
+  code: string;
+  stageId: string;
+  stageName: string;
+  mainStage: string;
+  grade?: string;
+  subjectId: string;
+  subjectName: string;
+  teacherId: string;
+  teacherName: string;
+  schedule?: string;
+  room?: string;
+  maxCapacity: number;
+  studentIds: string[];
+  monthlyFee: number;
+  active: boolean;
+  notes?: string;
+  createdAt: string;
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';

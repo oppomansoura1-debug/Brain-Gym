@@ -24,8 +24,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
   const activeSettings = settings || centerInfo || {
     centerName: 'BrainGYM التعليمي',
-    phone: '01002003004',
-    address: 'شارع المشاية السفلية أمام نادي الحوار، المنصورة، مصر'
+    phone: '01110168237',
+    address: 'المنصورة ش الاديب متفرع من ش الترعه'
   };
 
   const handlePrint = () => {

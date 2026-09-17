@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Teacher entity in the center",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique teacher ID" },
+        "name": { "type": "string", "description": "Teacher full name" },
+        "code": { "type": "string", "description": "Teacher code" },
+        "phone": { "type": "string", "description": "Teacher phone" },
+        "email": { "type": "string", "description": "Teacher email" },
+        "subjectId": { "type": "string", "description": "Subject ID" },
+        "subjectName": { "type": "string", "description": "Subject name" },
+        "stages": { "type": "array", "description": "Assigned stages and prices" },
+        "active": { "type": "boolean", "description": "Teacher status" },
+        "joinDate": { "type": "string", "description": "Date teacher joined" },
+        "totalStudents": { "type": "number", "description": "Total students" }
+      },
+      "required": ["id", "name"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student entity in the center",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Student ID" },
+        "name": { "type": "string", "description": "Student name" },
+        "code": { "type": "string", "description": "Student code" },
+        "phone": { "type": "string", "description": "Student phone" },
+        "parentPhone": { "type": "string", "description": "Parent phone" },
+        "stage": { "type": "string", "description": "Stage name" },
+        "grade": { "type": "string", "description": "Grade name" },
+        "joinDate": { "type": "string", "description": "Join date" },
+        "status": { "type": "string", "description": "Status" }
+      },
+      "required": ["id", "name"]
+    },
+    "Group": {
+      "title": "EducationalGroup",
+      "description": "Group entity in the center",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Group ID" },
+        "name": { "type": "string", "description": "Group name" },
+        "teacherId": { "type": "string", "description": "Teacher ID" },
+        "teacherName": { "type": "string", "description": "Teacher name" },
+        "subjectName": { "type": "string", "description": "Subject name" },
+        "stage": { "type": "string", "description": "Stage" },
+        "grade": { "type": "string", "description": "Grade" },
+        "days": { "type": "array", "description": "Days of week" },
+        "time": { "type": "string", "description": "Class time" },
+        "maxStudents": { "type": "number", "description": "Max capacity" }
+      },
+      "required": ["id", "name"]
+    },
+    "Stage": {
+      "title": "AcademicStage",
+      "description": "Academic stage and grade",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Stage ID" },
+        "name": { "type": "string", "description": "Stage name" },
+        "mainStage": { "type": "string", "description": "Main stage" },
+        "grade": { "type": "string", "description": "Grade" }
+      },
+      "required": ["id", "name"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Educational subject",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Subject ID" },
+        "name": { "type": "string", "description": "Subject name" },
+        "stageId": { "type": "string", "description": "Stage ID" }
+      },
+      "required": ["id", "name"]
+    },
+    "Transaction": {
+      "title": "FinancialTransaction",
+      "description": "Financial transaction invoice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Transaction ID" },
+        "type": { "type": "string", "description": "Income or expense" },
+        "amount": { "type": "number", "description": "Amount in EGP" },
+        "date": { "type": "string", "description": "Date" }
+      },
+      "required": ["id", "amount", "type"]
+    }
+  },
+  "firestore": {
+    "/teachers/{teacherId}": {
+      "schema": "Teacher",
+      "description": "Center teachers collection"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Center students collection"
+    },
+    "/groups/{groupId}": {
+      "schema": "Group",
+      "description": "Educational groups collection"
+    },
+    "/stages/{stageId}": {
+      "schema": "Stage",
+      "description": "Academic stages collection"
+    },
+    "/subjects/{subjectId}": {
+      "schema": "Subject",
+      "description": "Subjects collection"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial transactions collection"
+    }
+  }
+}
