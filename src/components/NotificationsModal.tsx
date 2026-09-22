@@ -9,7 +9,9 @@ import {
   ShieldCheck, 
   Clock,
   UserX,
-  Award
+  Award,
+  Calendar,
+  MessageSquare
 } from 'lucide-react';
 
 interface NotificationsModalProps {
@@ -54,6 +56,10 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
         return <ShieldCheck className="w-5 h-5 text-indigo-600" />;
       case 'financial_due':
         return <AlertTriangle className="w-5 h-5 text-rose-500" />;
+      case 'task_reminder':
+        return <Calendar className="w-5 h-5 text-indigo-600" />;
+      case 'chat_message':
+        return <MessageSquare className="w-5 h-5 text-indigo-600" />;
       default:
         return <Bell className="w-5 h-5 text-indigo-600" />;
     }

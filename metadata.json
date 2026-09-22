@@ -1,7 +1,9 @@
 {
   "name": "منظومة إدارة المركز التعليمي المتكاملة",
   "description": "منصة BrainGYM التعليمية الشاملة: شؤون الطلاب والمعلمين، التدريب المعرفي، الحضور والغياب، التقييمات، التقارير والمصروفات المالية، بوابات الدفع الإلكتروني، ودعم الأدوار المتعددة مع التشفير والنسخ الاحتياطي.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "microphone"
+  ],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
 

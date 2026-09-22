@@ -18,7 +18,9 @@ import {
   AttendanceRecord, 
   StudentAssessment,
   CenterSettings,
-  User
+  User,
+  ChatMessage,
+  CalendarTask
 } from '../types';
 
 // Helper to remove undefined fields because Firestore rejects undefined
@@ -478,6 +480,24 @@ export function subscribeUsers(
     if (!snapshot.empty) {
       const items: User[] = [];
       snapshot.forEach((d) => items.push(d.data() as User));
+
+      // Ensure any initial user (such as Hanan) is persisted in Firestore if missing
+      const missingInitial = initialFallback.filter(
+        (fu) => !items.some((iu) => iu.id === fu.id || iu.username.toLowerCase() === fu.username.toLowerCase())
+      );
+      if (missingInitial.length > 0) {
+        try {
+          const batch = writeBatch(db);
+          missingInitial.forEach((mu) => {
+            batch.set(doc(db, 'users', mu.id), cleanForFirestore(mu));
+            items.push(mu);
+          });
+          batch.commit().catch(console.error);
+        } catch (err) {
+          console.error('Error auto-syncing new admin users:', err);
+        }
+      }
+
       onUpdate(items);
     }
   });
@@ -505,6 +525,8 @@ export interface ManualSyncPayload {
   assessments: StudentAssessment[];
   centerSettings: CenterSettings;
   users: User[];
+  messages?: ChatMessage[];
+  calendarTasks?: CalendarTask[];
 }
 
 export interface ManualSyncResult {
@@ -577,6 +599,22 @@ export async function forceManualFullSync(payload: ManualSyncPayload): Promise<M
       count++;
     });
 
+    // Internal Messages (recent up to 50)
+    if (payload.messages) {
+      payload.messages.slice(-50).forEach((m) => {
+        batch.set(doc(db, 'internal_messages', m.id), cleanForFirestore(m), { merge: true });
+        count++;
+      });
+    }
+
+    // Calendar Tasks
+    if (payload.calendarTasks) {
+      payload.calendarTasks.forEach((t) => {
+        batch.set(doc(db, 'calendar_tasks', t.id), cleanForFirestore(t), { merge: true });
+        count++;
+      });
+    }
+
     await batch.commit();
 
     const timeStr = new Date().toLocaleTimeString('ar-EG', {
@@ -596,5 +634,109 @@ export async function forceManualFullSync(payload: ManualSyncPayload): Promise<M
     throw new Error(err?.message || 'تعذر استكمال المزامنة السحابية');
   }
 }
+
+// ==========================================
+// 12. INTERNAL MESSAGES SYNC
+// ==========================================
+export function subscribeMessages(
+  onUpdate: (messages: ChatMessage[]) => void,
+  initialFallback: ChatMessage[]
+): () => void {
+  const colRef = collection(db, 'internal_messages');
+  let hasSeeded = false;
+
+  const unsubscribe = onSnapshot(colRef, async (snapshot) => {
+    if (snapshot.empty && !hasSeeded && initialFallback.length > 0) {
+      hasSeeded = true;
+      try {
+        const batch = writeBatch(db);
+        initialFallback.forEach((m) => {
+          const docRef = doc(db, 'internal_messages', m.id);
+          batch.set(docRef, cleanForFirestore(m));
+        });
+        await batch.commit();
+        return;
+      } catch (err) {
+        console.error('Error seeding initial messages to Firestore:', err);
+      }
+    }
+
+    if (!snapshot.empty) {
+      const items: ChatMessage[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push(docSnap.data() as ChatMessage);
+      });
+      // Sort chronologically
+      items.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      onUpdate(items);
+    }
+  }, (error) => {
+    console.error('Firestore messages subscription error:', error);
+  });
+
+  return unsubscribe;
+}
+
+export async function saveMessageToCloud(message: ChatMessage): Promise<void> {
+  const docRef = doc(db, 'internal_messages', message.id);
+  await setDoc(docRef, cleanForFirestore(message), { merge: true });
+}
+
+// ==========================================
+// 13. CALENDAR TASKS SYNC
+// ==========================================
+export function subscribeCalendarTasks(
+  onUpdate: (tasks: CalendarTask[]) => void,
+  initialFallback: CalendarTask[]
+): () => void {
+  const colRef = collection(db, 'calendar_tasks');
+  let hasSeeded = false;
+
+  const unsubscribe = onSnapshot(colRef, async (snapshot) => {
+    if (snapshot.empty && !hasSeeded && initialFallback.length > 0) {
+      hasSeeded = true;
+      try {
+        const batch = writeBatch(db);
+        initialFallback.forEach((t) => {
+          const docRef = doc(db, 'calendar_tasks', t.id);
+          batch.set(docRef, cleanForFirestore(t));
+        });
+        await batch.commit();
+        return;
+      } catch (err) {
+        console.error('Error seeding initial calendar tasks to Firestore:', err);
+      }
+    }
+
+    if (!snapshot.empty) {
+      const items: CalendarTask[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push(docSnap.data() as CalendarTask);
+      });
+      // Sort by date and time
+      items.sort((a, b) => {
+        const dtA = `${a.date}T${a.time || '00:00'}`;
+        const dtB = `${b.date}T${b.time || '00:00'}`;
+        return new Date(dtA).getTime() - new Date(dtB).getTime();
+      });
+      onUpdate(items);
+    }
+  }, (error) => {
+    console.error('Firestore calendar tasks subscription error:', error);
+  });
+
+  return unsubscribe;
+}
+
+export async function saveCalendarTaskToCloud(task: CalendarTask): Promise<void> {
+  const docRef = doc(db, 'calendar_tasks', task.id);
+  await setDoc(docRef, cleanForFirestore(task), { merge: true });
+}
+
+export async function deleteCalendarTaskFromCloud(taskId: string): Promise<void> {
+  const docRef = doc(db, 'calendar_tasks', taskId);
+  await deleteDoc(docRef);
+}
+
 
 

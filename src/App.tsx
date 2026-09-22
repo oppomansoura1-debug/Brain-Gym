@@ -14,7 +14,9 @@ import {
   AttendanceStatus,
   CenterSettings,
   AuditLog,
-  BackupLog
+  BackupLog,
+  ChatMessage,
+  CalendarTask
 } from './types';
 import { 
   INITIAL_USERS,
@@ -28,7 +30,9 @@ import {
   INITIAL_ASSESSMENTS, 
   INITIAL_NOTIFICATIONS,
   INITIAL_SETTINGS,
-  INITIAL_AUDIT_LOGS
+  INITIAL_AUDIT_LOGS,
+  INITIAL_MESSAGES,
+  INITIAL_CALENDAR_TASKS
 } from './data/initialData';
 import { getBackupHistoryLogs } from './services/securityBackup';
 import { 
@@ -60,9 +64,15 @@ import {
   subscribeUsers,
   saveUserToCloud,
   deleteUserFromCloud,
+  subscribeMessages,
+  saveMessageToCloud,
+  subscribeCalendarTasks,
+  saveCalendarTaskToCloud,
+  deleteCalendarTaskFromCloud,
   forceManualFullSync
 } from './services/firebaseSync';
 import { Check, AlertCircle } from 'lucide-react';
+import { checkStageSuitability } from './utils/stageUtils';
 
 // UI Components
 import { Header } from './components/Header';
@@ -72,6 +82,8 @@ import { PaymentGatewayModal } from './components/PaymentGatewayModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { BackupSecurityModal } from './components/BackupSecurityModal';
 import { UsersManagementModal } from './components/UsersManagementModal';
+import { InternalChatModal } from './components/InternalChatModal';
+import { CalendarTasksModal } from './components/CalendarTasksModal';
 
 // Views
 import { AdminDashboardView } from './views/AdminDashboardView';
@@ -89,7 +101,21 @@ export default function App() {
   // Users and Authentication State
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('educenter_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as User[];
+        const missing = INITIAL_USERS.filter(
+          (iu) => !parsed.some((pu) => pu.id === iu.id || pu.username.toLowerCase() === iu.username.toLowerCase())
+        );
+        if (missing.length > 0) {
+          return [...parsed, ...missing];
+        }
+        return parsed;
+      } catch {
+        return INITIAL_USERS;
+      }
+    }
+    return INITIAL_USERS;
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -114,11 +140,21 @@ export default function App() {
     }
   }, [currentUser]);
 
+  // Guard activeTab based on user role
+  useEffect(() => {
+    if (currentRole === 'data_entry') {
+      const allowedDataEntryTabs = ['students', 'teachers', 'groups', 'stages', 'attendance'];
+      if (!allowedDataEntryTabs.includes(activeTab)) {
+        setActiveTab('students');
+      }
+    }
+  }, [currentRole, activeTab]);
+
   // Handle Login & Logout
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     if (user.role === 'data_entry') {
-      setActiveTab('data_portal');
+      setActiveTab('students');
     } else if (user.role === 'teacher') {
       setActiveTab('teacher_portal');
     } else {
@@ -252,8 +288,22 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [backupLogs, setBackupLogs] = useState<BackupLog[]>(getBackupHistoryLogs);
 
+  // Messages & Chat State (Internal Messages)
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const saved = localStorage.getItem('educenter_messages');
+    return saved ? JSON.parse(saved) : INITIAL_MESSAGES;
+  });
+
+  // Calendar & Synchronized Tasks State
+  const [calendarTasks, setCalendarTasks] = useState<CalendarTask[]>(() => {
+    const saved = localStorage.getItem('educenter_calendar_tasks');
+    return saved ? JSON.parse(saved) : INITIAL_CALENDAR_TASKS;
+  });
+
   // Modals
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [showCalendarTasksModal, setShowCalendarTasksModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedStudentForPayment, setSelectedStudentForPayment] = useState<Student | undefined>(undefined);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -281,6 +331,8 @@ export default function App() {
         assessments,
         centerSettings,
         users,
+        messages,
+        calendarTasks,
       });
 
       setLastSyncTime(result.timestamp);
@@ -382,6 +434,18 @@ export default function App() {
       }
     }, INITIAL_USERS);
 
+    const unsubMessages = subscribeMessages((cloudMsgs) => {
+      if (cloudMsgs && cloudMsgs.length > 0) {
+        setMessages(cloudMsgs);
+      }
+    }, INITIAL_MESSAGES);
+
+    const unsubTasks = subscribeCalendarTasks((cloudTasks) => {
+      if (cloudTasks && cloudTasks.length > 0) {
+        setCalendarTasks(cloudTasks);
+      }
+    }, INITIAL_CALENDAR_TASKS);
+
     return () => {
       unsubTeachers();
       unsubStudents();
@@ -393,10 +457,20 @@ export default function App() {
       unsubAssessments();
       unsubSettings();
       unsubUsers();
+      unsubMessages();
+      unsubTasks();
     };
   }, []);
 
   // Offline cache backup
+  useEffect(() => {
+    localStorage.setItem('educenter_messages', JSON.stringify(messages));
+  }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem('educenter_calendar_tasks', JSON.stringify(calendarTasks));
+  }, [calendarTasks]);
+
   useEffect(() => {
     localStorage.setItem('educenter_students', JSON.stringify(students));
   }, [students]);
@@ -436,6 +510,112 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('educenter_settings', JSON.stringify(centerSettings));
   }, [centerSettings]);
+
+  // Automated Task Reminder & Due Checker
+  useEffect(() => {
+    const checkTaskReminders = () => {
+      const now = new Date();
+      const nowTime = now.getTime();
+
+      calendarTasks.forEach((task) => {
+        if (task.completed || task.reminded) return;
+
+        const reminderMinutes = task.reminderMinutesBefore ?? 15;
+        const taskDateTimeStr = `${task.date}T${task.time || '00:00'}`;
+        const taskTime = new Date(taskDateTimeStr).getTime();
+        const reminderTime = taskTime - (reminderMinutes * 60 * 1000);
+
+        // If current time is within or past reminder window (within reasonable 4 hours)
+        if (nowTime >= reminderTime && nowTime <= taskTime + 14400000) {
+          const reminderNotif: SystemNotification = {
+            id: `task_remind_${task.id}_${Date.now()}`,
+            title: `⏰ تذكير بمهمة: ${task.title}`,
+            message: `موعد المهمة: ${task.date} في تمام الساعة ${task.time || ''} - المعين: ${task.assignedToName || 'الجميع'}.`,
+            type: 'task_reminder',
+            targetRole: 'all',
+            timestamp: 'الآن',
+            read: false
+          };
+
+          setNotifications((prev) => [reminderNotif, ...prev]);
+
+          // Mark reminded in state & Cloud to prevent duplicate alerts
+          const updatedTask: CalendarTask = { ...task, reminded: true };
+          saveCalendarTaskToCloud(updatedTask).catch(console.error);
+          setCalendarTasks((prev) => prev.map((t) => t.id === task.id ? updatedTask : t));
+        }
+      });
+    };
+
+    checkTaskReminders();
+    const interval = setInterval(checkTaskReminders, 30000);
+    return () => clearInterval(interval);
+  }, [calendarTasks]);
+
+  // Chat & Messaging Handlers
+  const handleSendMessage = (msgData: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    const newMsg: ChatMessage = {
+      ...msgData,
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: new Date().toISOString()
+    };
+
+    setMessages((prev) => [...prev, newMsg]);
+    saveMessageToCloud(newMsg).catch(console.error);
+
+    // Create system notification for internal team alert
+    if (newMsg.recipientId === 'all' || newMsg.recipientId !== currentUser?.id) {
+      const chatNotif: SystemNotification = {
+        id: `notif_chat_${Date.now()}`,
+        title: `رسالة داخلية جديدة من ${newMsg.senderName}`,
+        message: newMsg.text || (newMsg.imageUrl ? 'أرسل صورة مرفقة' : 'أرسل تسجيلاً صوتياً'),
+        type: 'chat_message',
+        targetRole: 'all',
+        timestamp: 'الآن',
+        read: false
+      };
+      setNotifications((prev) => [chatNotif, ...prev]);
+    }
+  };
+
+  // Calendar Tasks Handlers
+  const handleAddCalendarTask = (taskData: Omit<CalendarTask, 'id'>) => {
+    const newTask: CalendarTask = {
+      ...taskData,
+      id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+    };
+    setCalendarTasks((prev) => [...prev, newTask]);
+    saveCalendarTaskToCloud(newTask).catch(console.error);
+  };
+
+  const handleUpdateCalendarTask = (task: CalendarTask) => {
+    setCalendarTasks((prev) => prev.map((t) => t.id === task.id ? task : t));
+    saveCalendarTaskToCloud(task).catch(console.error);
+  };
+
+  const handleDeleteCalendarTask = (taskId: string) => {
+    setCalendarTasks((prev) => prev.filter((t) => t.id !== taskId));
+    deleteCalendarTaskFromCloud(taskId).catch(console.error);
+  };
+
+  const handleTriggerCustomNotification = (title: string, message: string) => {
+    const notif: SystemNotification = {
+      id: `custom_notif_${Date.now()}`,
+      title,
+      message,
+      type: 'task_reminder',
+      targetRole: 'all',
+      timestamp: 'الآن',
+      read: false
+    };
+    setNotifications((prev) => [notif, ...prev]);
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const unreadMessagesCount = messages.filter(
+    (m) => currentUser && !m.readBy?.includes(currentUser.id) && m.senderId !== currentUser.id && (m.recipientId === 'all' || m.recipientId === currentUser.id)
+  ).length;
+  const todayTasksCount = calendarTasks.filter((t) => t.date === todayStr && !t.completed).length;
 
   // Adapt active tab when switching view
   const handleRoleChange = (role: UserRole) => {
@@ -612,6 +792,14 @@ export default function App() {
   const handleEnrollStudentInGroup = (groupId: string, studentId: string) => {
     const grp = groups.find(g => g.id === groupId);
     if (!grp) return;
+    const std = students.find(s => s.id === studentId);
+    if (!std) return;
+
+    // Academic stage validation: ensure student is suitable for group's stage
+    if (!checkStageSuitability(std, grp, stages)) {
+      console.warn(`[Academic Suitability Warning]: Student "${std.name}" (${std.stageName}) is not suitable for group "${grp.name}" (${grp.stageName || grp.mainStage})`);
+      return;
+    }
 
     // Add student ID to group
     const updatedGroup = {
@@ -638,7 +826,6 @@ export default function App() {
       return std;
     }));
 
-    const std = students.find(s => s.id === studentId);
     const audit: AuditLog = {
       id: `aud_${Date.now()}`,
       action: 'تسجيل طالب في مادة تعليمية',
@@ -972,6 +1159,10 @@ export default function App() {
         onManualSync={handleManualSync}
         isSyncing={isSyncing}
         lastSyncTime={lastSyncTime}
+        onOpenChat={() => setShowChatModal(true)}
+        unreadMessagesCount={unreadMessagesCount}
+        onOpenCalendarTasks={() => setShowCalendarTasksModal(true)}
+        todayTasksCount={todayTasksCount}
       />
 
       {/* Main Content Area */}
@@ -979,24 +1170,77 @@ export default function App() {
         
         {/* Dynamic Views based on Role and activeTab */}
         
-        {/* DATA ENTRY PORTAL */}
+        {/* DATA ENTRY ROLE VIEWS */}
         {currentRole === 'data_entry' && (
-          <DataEntryPortalView
-            students={students}
-            stages={stages}
-            subjects={subjects}
-            transactions={transactions}
-            onAddStudent={handleAddStudent}
-            onOpenPaymentGateway={() => {
-              setSelectedStudentForPayment(undefined);
-              setShowPaymentModal(true);
-            }}
-            onAddExpenseVoucher={handleAddTransaction}
-            onViewReceipt={(txn) => {
-              setSelectedTransactionForReceipt(txn);
-              setShowReceiptModal(true);
-            }}
-          />
+          <>
+            {activeTab === 'students' && (
+              <StudentsManagementView
+                students={students}
+                stages={stages}
+                onAddStudent={handleAddStudent}
+                onUpdateStudent={handleUpdateStudent}
+                onDeleteStudent={handleDeleteStudent}
+                onPayForStudent={handlePayForStudent}
+                hideFinancials={true}
+              />
+            )}
+
+            {activeTab === 'teachers' && (
+              <TeachersManagementView
+                teachers={teachers}
+                subjects={subjects}
+                stages={stages}
+                onAddTeacher={handleAddTeacher}
+                onUpdateTeacher={handleUpdateTeacher}
+                onDeleteTeacher={handleDeleteTeacher}
+                onRecordTeacherPayout={handleAddTransaction}
+                hideFinancials={true}
+              />
+            )}
+
+            {activeTab === 'groups' && (
+              <GroupsManagementView
+                groups={groups}
+                students={students}
+                teachers={teachers}
+                subjects={subjects}
+                stages={stages}
+                onAddGroup={handleAddGroup}
+                onUpdateGroup={handleUpdateGroup}
+                onDeleteGroup={handleDeleteGroup}
+                onEnrollStudentInGroup={handleEnrollStudentInGroup}
+                onRemoveStudentFromGroup={handleRemoveStudentFromGroup}
+                onAddNewStudentAndEnroll={handleAddNewStudentAndEnroll}
+                hideFinancials={true}
+              />
+            )}
+
+            {activeTab === 'stages' && (
+              <StagesAndSubjectsView
+                stages={stages}
+                subjects={subjects}
+                teachers={teachers}
+                onAddStage={handleAddStage}
+                onAddSubject={handleAddSubject}
+                onUpdateStage={handleUpdateStage}
+                onDeleteStage={handleDeleteStage}
+                onUpdateSubject={handleUpdateSubject}
+                onDeleteSubject={handleDeleteSubject}
+                hideFinancials={true}
+              />
+            )}
+
+            {activeTab === 'attendance' && (
+              <AttendanceView
+                students={students}
+                stages={stages}
+                subjects={subjects}
+                attendanceRecords={attendanceRecords}
+                onRecordAttendance={handleRecordAttendance}
+                onSendParentAlert={handleSendParentAlert}
+              />
+            )}
+          </>
         )}
 
         {/* TEACHER PORTAL */}
@@ -1232,7 +1476,34 @@ export default function App() {
         />
       )}
 
-      {/* 6. Floating Sync Toast Notification */}
+      {/* 6. Internal Team Chat Modal (Text, Images, Voice Recordings) */}
+      {currentUser && (
+        <InternalChatModal
+          isOpen={showChatModal}
+          onClose={() => setShowChatModal(false)}
+          currentUser={currentUser}
+          users={users}
+          messages={messages}
+          onSendMessage={handleSendMessage}
+        />
+      )}
+
+      {/* 7. Synchronized Calendar & Tasks Reminder Modal */}
+      {currentUser && (
+        <CalendarTasksModal
+          isOpen={showCalendarTasksModal}
+          onClose={() => setShowCalendarTasksModal(false)}
+          currentUser={currentUser}
+          users={users}
+          tasks={calendarTasks}
+          onAddTask={handleAddCalendarTask}
+          onUpdateTask={handleUpdateCalendarTask}
+          onDeleteTask={handleDeleteCalendarTask}
+          onTriggerNotification={handleTriggerCustomNotification}
+        />
+      )}
+
+      {/* 8. Floating Sync Toast Notification */}
       {syncToast && (
         <div className="fixed bottom-6 left-6 z-50 animate-bounce-short flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border backdrop-blur-md bg-white/95 text-slate-800 transition-all duration-300 max-w-md">
           <div className={`p-2 rounded-xl shrink-0 ${syncToast.type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>

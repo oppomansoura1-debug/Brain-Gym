@@ -6,6 +6,7 @@ import {
   Subject, 
   AcademicStage 
 } from '../types';
+import { checkStageSuitability } from '../utils/stageUtils';
 import { 
   Users, 
   Plus, 
@@ -45,6 +46,7 @@ interface GroupsManagementViewProps {
   onEnrollStudentInGroup: (groupId: string, studentId: string) => void;
   onRemoveStudentFromGroup: (groupId: string, studentId: string) => void;
   onAddNewStudentAndEnroll?: (student: Partial<Student>, groupId: string) => void;
+  hideFinancials?: boolean;
 }
 
 export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
@@ -59,6 +61,7 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
   onEnrollStudentInGroup,
   onRemoveStudentFromGroup,
   onAddNewStudentAndEnroll,
+  hideFinancials = false,
 }) => {
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
@@ -77,6 +80,24 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
   const [targetGroupForEnroll, setTargetGroupForEnroll] = useState<EducationalGroup | null>(null);
   const [enrollStudentMode, setEnrollStudentMode] = useState<'existing' | 'new'>('existing');
   const [selectedStudentToEnroll, setSelectedStudentToEnroll] = useState<string>('');
+  const [enrollStudentSearchQuery, setEnrollStudentSearchQuery] = useState<string>('');
+
+  // Filter students to show ONLY those strictly matching the target group's academic stage
+  const eligibleStudentsForEnrollment = useMemo(() => {
+    if (!targetGroupForEnroll) return [];
+    return students.filter(std => checkStageSuitability(std, targetGroupForEnroll, stages));
+  }, [students, targetGroupForEnroll, stages]);
+
+  // Filter eligible students further by search term (name, code, or phone)
+  const filteredEligibleStudents = useMemo(() => {
+    if (!enrollStudentSearchQuery.trim()) return eligibleStudentsForEnrollment;
+    const q = enrollStudentSearchQuery.trim().toLowerCase();
+    return eligibleStudentsForEnrollment.filter(std => 
+      std.name.toLowerCase().includes(q) ||
+      std.code.toLowerCase().includes(q) ||
+      std.phone.includes(q)
+    );
+  }, [eligibleStudentsForEnrollment, enrollStudentSearchQuery]);
   
   // New student quick-register form
   const [newStudentName, setNewStudentName] = useState('');
@@ -397,6 +418,7 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
   const handleOpenEnrollForGroup = (grp: EducationalGroup) => {
     setTargetGroupForEnroll(grp);
     setSelectedStudentToEnroll('');
+    setEnrollStudentSearchQuery('');
     setNewStudentName('');
     setNewStudentPhone('');
     setNewStudentParentPhone('');
@@ -410,7 +432,19 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
     if (!targetGroupForEnroll) return;
 
     if (enrollStudentMode === 'existing') {
-      if (!selectedStudentToEnroll) return;
+      if (!selectedStudentToEnroll) {
+        showToast('يرجى اختيار طالب لتسجيله في المجموعة.', 'info');
+        return;
+      }
+
+      const std = students.find(s => s.id === selectedStudentToEnroll);
+      if (!std) return;
+
+      // Ensure the student strictly matches the academic stage of the group
+      if (!checkStageSuitability(std, targetGroupForEnroll, stages)) {
+        showToast(`عذراً، الطالب "${std.name}" غير مناسب لهذه المجموعة نظراً لاختلاف المرحلة الدراسية (${std.stageName} لا تطابق ${targetGroupForEnroll.stageName || targetGroupForEnroll.mainStage})!`, 'info');
+        return;
+      }
       
       // Check if student already enrolled
       if (targetGroupForEnroll.studentIds.includes(selectedStudentToEnroll)) {
@@ -419,8 +453,7 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
       }
 
       onEnrollStudentInGroup(targetGroupForEnroll.id, selectedStudentToEnroll);
-      const std = students.find(s => s.id === selectedStudentToEnroll);
-      showToast(`تم تسجيل الطالب "${std?.name || 'المختار'}" في مادة ${targetGroupForEnroll.subjectName} ومجموعة ${targetGroupForEnroll.name} بنجاح.`);
+      showToast(`تم تسجيل الطالب "${std.name}" في مادة ${targetGroupForEnroll.subjectName} ومجموعة ${targetGroupForEnroll.name} بنجاح.`);
     } else {
       // New student registration
       if (!newStudentName.trim()) return;
@@ -855,7 +888,9 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
 
                     <div className="flex items-center justify-between text-[11px] text-slate-500">
                       <span>{isFull ? 'المجموعة ممتلئة' : `متبقي ${capacity - enrolledCount} مقعد`}</span>
-                      <span className="font-semibold">{group.monthlyFee} ج.م / شهر</span>
+                      {!hideFinancials && (
+                        <span className="font-semibold">{group.monthlyFee} ج.م / شهر</span>
+                      )}
                     </div>
                   </div>
 
@@ -900,7 +935,7 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
                   <th className="py-3 px-4">المعلم المسجل</th>
                   <th className="py-3 px-4">المواعيد والقاعة</th>
                   <th className="py-3 px-4 text-center">الطلاب / السعة</th>
-                  <th className="py-3 px-4">الاشتراك</th>
+                  {!hideFinancials && <th className="py-3 px-4">الاشتراك</th>}
                   <th className="py-3 px-4 text-center">إجراءات</th>
                 </tr>
               </thead>
@@ -935,9 +970,11 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
                         <span className="font-black text-slate-900">{count}</span>
                         <span className="text-slate-400"> / {capacity}</span>
                       </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">
-                        {group.monthlyFee} ج.م
-                      </td>
+                      {!hideFinancials && (
+                        <td className="py-3 px-4 font-bold text-slate-800">
+                          {group.monthlyFee} ج.م
+                        </td>
+                      )}
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -1312,10 +1349,32 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
                 <span className="text-slate-500 block text-[11px]">المرحلة والصف:</span>
                 <span className="font-bold text-slate-900">{targetGroupForEnroll.mainStage} - {targetGroupForEnroll.grade}</span>
               </div>
-              <div>
-                <span className="text-slate-500 block text-[11px]">الاشتراك الشهري:</span>
-                <span className="font-black text-emerald-700">{targetGroupForEnroll.monthlyFee} ج.م</span>
+              {!hideFinancials && (
+                <div>
+                  <span className="text-slate-500 block text-[11px]">الاشتراك الشهري:</span>
+                  <span className="font-black text-emerald-700">{targetGroupForEnroll.monthlyFee} ج.م</span>
+                </div>
+              )}
+            </div>
+
+            {/* Academic Stage Matching Notice */}
+            <div className="mx-6 mt-4 p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <span className="font-bold text-emerald-950 block text-xs">
+                    المرحلة الدراسية للمجموعة: {targetGroupForEnroll.stageName || `${targetGroupForEnroll.mainStage} - ${targetGroupForEnroll.grade}`}
+                  </span>
+                  <span className="text-[11px] text-emerald-700">
+                    تصفية تلقائية: يتم إظهار الطلاب المنتمين لهذه المرحلة الدراسية فقط
+                  </span>
+                </div>
               </div>
+              <span className="text-[11px] font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-lg shrink-0 shadow-xs">
+                {eligibleStudentsForEnrollment.length} طالب مناسب
+              </span>
             </div>
 
             {/* Form */}
@@ -1332,7 +1391,7 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  اختيار طالب مقيد بالسنتر
+                  اختيار طالب مقيد بالسنتر ({eligibleStudentsForEnrollment.length})
                 </button>
                 <button
                   type="button"
@@ -1348,26 +1407,95 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
               </div>
 
               {enrollStudentMode === 'existing' ? (
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1.5">
-                    اختر الطالب لتسجيله في مادة "{targetGroupForEnroll.subjectName}":
-                  </label>
-                  <select
-                    required
-                    value={selectedStudentToEnroll}
-                    onChange={(e) => setSelectedStudentToEnroll(e.target.value)}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white text-slate-900 font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
-                  >
-                    <option value="">-- اختر من قائمة الطلاب المقيدين --</option>
-                    {students.map(std => {
-                      const isAlreadyEnrolled = targetGroupForEnroll.studentIds.includes(std.id);
-                      return (
-                        <option key={std.id} value={std.id} disabled={isAlreadyEnrolled}>
-                          {std.name} - كود: {std.code} ({std.stageName}) {isAlreadyEnrolled ? '✓ (مسجل بالفعل)' : ''}
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block font-bold text-slate-800">
+                        اختر الطالب المقيد بمرحلة ({targetGroupForEnroll.mainStage} - {targetGroupForEnroll.grade}):
+                      </label>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        مطابق للمرحلة الدراسية
+                      </span>
+                    </div>
+
+                    {/* Quick Search within eligible students */}
+                    {eligibleStudentsForEnrollment.length > 3 && (
+                      <div className="relative mb-2">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+                        <input
+                          type="text"
+                          value={enrollStudentSearchQuery}
+                          onChange={(e) => setEnrollStudentSearchQuery(e.target.value)}
+                          placeholder="بحث سريع بالاسم أو كود الطالب..."
+                          className="w-full pr-8 pl-8 py-1.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-900 text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                        />
+                        {enrollStudentSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setEnrollStudentSearchQuery('')}
+                            className="absolute left-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {eligibleStudentsForEnrollment.length === 0 ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center space-y-2">
+                        <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
+                        <p className="font-bold text-amber-900 text-xs">
+                          لا يوجد طلاب مسجلون في مرحلة ({targetGroupForEnroll.stageName || `${targetGroupForEnroll.mainStage} - ${targetGroupForEnroll.grade}`}) حالياً
+                        </p>
+                        <p className="text-[11px] text-amber-700 leading-relaxed">
+                          يمكنك تسجيل طالب جديد فوري لهذه المجموعة عبر تبويب <b>"تسجيل طالب جديد فوري"</b> أعلاه، وسيقوم النظام بربطه تلقائياً بهذه المرحلة الدراسية والمادة.
+                        </p>
+                      </div>
+                    ) : (
+                      <select
+                        required
+                        value={selectedStudentToEnroll}
+                        onChange={(e) => setSelectedStudentToEnroll(e.target.value)}
+                        className="w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white text-slate-900 font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                      >
+                        <option value="">
+                          {filteredEligibleStudents.length === 0 
+                            ? '-- لا توجد نتائج مطابقة لبحثك في هذه المرحلة --' 
+                            : `-- اختر طالباً من مرحلة (${targetGroupForEnroll.stageName || targetGroupForEnroll.mainStage}) (${filteredEligibleStudents.length} متاح) --`}
                         </option>
-                      );
-                    })}
-                  </select>
+                        {filteredEligibleStudents.map(std => {
+                          const isAlreadyEnrolled = targetGroupForEnroll.studentIds.includes(std.id);
+                          return (
+                            <option key={std.id} value={std.id} disabled={isAlreadyEnrolled}>
+                              {std.name} - كود: {std.code} {isAlreadyEnrolled ? '✓ (مسجل بالفعل بالمجموعة)' : `(${std.stageName})`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* If student is selected, display verified details badge */}
+                  {selectedStudentToEnroll && (
+                    <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200 text-slate-800 flex items-center justify-between text-xs">
+                      {(() => {
+                        const sel = students.find(s => s.id === selectedStudentToEnroll);
+                        if (!sel) return null;
+                        return (
+                          <>
+                            <div>
+                              <span className="font-bold text-slate-900 block">{sel.name} (كود: {sel.code})</span>
+                              <span className="text-[11px] text-slate-600">{sel.stageName} | هاتف: {sel.phone}</span>
+                            </div>
+                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg font-bold text-[10px] flex items-center gap-1 shrink-0">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>مرحلة متوافقة</span>
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
@@ -1494,7 +1622,7 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
                         <th className="py-2.5 px-3">اسم الطالب</th>
                         <th className="py-2.5 px-3">هاتف الطالب</th>
                         <th className="py-2.5 px-3">هاتف ولي الأمر</th>
-                        <th className="py-2.5 px-3">الحالة المالية</th>
+                        {!hideFinancials && <th className="py-2.5 px-3">الحالة المالية</th>}
                         <th className="py-2.5 px-3 text-center">إجراء</th>
                       </tr>
                     </thead>
@@ -1509,17 +1637,19 @@ export const GroupsManagementView: React.FC<GroupsManagementViewProps> = ({
                             <td className="py-2.5 px-3 font-bold text-slate-900">{std.name}</td>
                             <td className="py-2.5 px-3 font-mono text-slate-600">{std.phone}</td>
                             <td className="py-2.5 px-3 font-mono text-slate-600">{std.parentPhone}</td>
-                            <td className="py-2.5 px-3">
-                              {std.balance < 0 ? (
-                                <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md">
-                                  عليه {Math.abs(std.balance)} ج.م
-                                </span>
-                              ) : (
-                                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                                  خالص الحساب
-                                </span>
-                              )}
-                            </td>
+                            {!hideFinancials && (
+                              <td className="py-2.5 px-3">
+                                {std.balance < 0 ? (
+                                  <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md">
+                                    عليه {Math.abs(std.balance)} ج.م
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                    خالص الحساب
+                                  </span>
+                                )}
+                              </td>
+                            )}
                             <td className="py-2.5 px-3 text-center">
                               <button
                                 onClick={() => handleRemoveStudent(rosterGroup.id, std.id, std.name)}

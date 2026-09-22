@@ -20,7 +20,9 @@ import {
   UserCog,
   BookOpen,
   RefreshCw,
-  Check
+  Check,
+  MessageSquare,
+  Calendar
 } from 'lucide-react';
 
 export interface HeaderProps {
@@ -41,6 +43,10 @@ export interface HeaderProps {
   onManualSync?: () => void;
   isSyncing?: boolean;
   lastSyncTime?: string | null;
+  onOpenChat?: () => void;
+  unreadMessagesCount?: number;
+  onOpenCalendarTasks?: () => void;
+  todayTasksCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -61,6 +67,10 @@ export const Header: React.FC<HeaderProps> = ({
   onManualSync,
   isSyncing = false,
   lastSyncTime,
+  onOpenChat,
+  unreadMessagesCount = 0,
+  onOpenCalendarTasks,
+  todayTasksCount = 0,
 }) => {
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
   const unreadNotifs = safeNotifications.filter(
@@ -85,6 +95,16 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'attendance', label: 'الحضور والغياب', icon: CalendarCheck },
     { id: 'assessments', label: 'الدرجات والتقييم', icon: Award },
   ];
+
+  const dataEntryTabs = [
+    { id: 'students', label: 'شؤون الطلاب', icon: Users },
+    { id: 'teachers', label: 'المعلمون', icon: GraduationCap },
+    { id: 'groups', label: 'المجموعات', icon: BookOpen },
+    { id: 'stages', label: 'المراحل والمناهج', icon: Layers },
+    { id: 'attendance', label: 'الحضور والغياب', icon: CalendarCheck },
+  ];
+
+  const activeNavTabs = currentRole === 'admin' ? adminTabs : currentRole === 'data_entry' ? dataEntryTabs : [];
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
@@ -150,25 +170,29 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Left side: Quick Actions & Profile */}
           <div className="flex items-center gap-2 sm:gap-3">
             
-            {/* Payment Gateway Trigger */}
-            <button
-              onClick={onOpenPaymentGateway}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm shadow-emerald-600/20 transition cursor-pointer"
-              title="بوابة التحصيل الإلكتروني"
-            >
-              <CreditCard className="w-4 h-4" />
-              <span className="hidden sm:inline">دفع إلكتروني</span>
-            </button>
+            {/* Payment Gateway Trigger (Admin only) */}
+            {currentRole === 'admin' && onOpenPaymentGateway && (
+              <button
+                onClick={onOpenPaymentGateway}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm shadow-emerald-600/20 transition cursor-pointer"
+                title="بوابة التحصيل الإلكتروني"
+              >
+                <CreditCard className="w-4 h-4" />
+                <span className="hidden sm:inline">دفع إلكتروني</span>
+              </button>
+            )}
 
-            {/* Backup & Security Trigger */}
-            <button
-              onClick={handleBackup}
-              className="p-2 sm:px-3 sm:py-2 text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              title="النسخ الاحتياطي والأمان"
-            >
-              <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              <span className="hidden md:inline">النسخ والأمان</span>
-            </button>
+            {/* Backup & Security Trigger (Admin only) */}
+            {currentRole === 'admin' && (
+              <button
+                onClick={handleBackup}
+                className="p-2 sm:px-3 sm:py-2 text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                title="النسخ الاحتياطي والأمان"
+              >
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <span className="hidden md:inline">النسخ والأمان</span>
+              </button>
+            )}
 
             {/* User Management Trigger (Only for Admin) */}
             {currentRole === 'admin' && onOpenUsersManagement && (
@@ -200,6 +224,40 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
                 {lastSyncTime && !isSyncing && (
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 hidden lg:inline-block" title="متزامن"></span>
+                )}
+              </button>
+            )}
+
+            {/* Synchronized Calendar & Tasks Reminder */}
+            {onOpenCalendarTasks && (
+              <button
+                onClick={onOpenCalendarTasks}
+                className="relative p-2 sm:px-3 sm:py-2 text-slate-700 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="التقويم المتزامن وجدول المهام والتذكيرات"
+              >
+                <Calendar className="w-4 h-4 text-indigo-600" />
+                <span className="hidden md:inline">التقويم والمهام</span>
+                {todayTasksCount > 0 && (
+                  <span className="min-w-4 h-4 px-1 bg-indigo-600 text-white text-[10px] font-black rounded-full flex items-center justify-center">
+                    {todayTasksCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Internal Team Chat */}
+            {onOpenChat && (
+              <button
+                onClick={onOpenChat}
+                className="relative p-2 sm:px-3 sm:py-2 text-slate-700 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="الدردشة والرسائل الداخلية الفورية (نصوص، صور، صوت)"
+              >
+                <MessageSquare className="w-4 h-4 text-indigo-600" />
+                <span className="hidden md:inline">الدردشة الداخلية</span>
+                {unreadMessagesCount > 0 && (
+                  <span className="min-w-4 h-4 px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-pulse">
+                    {unreadMessagesCount}
+                  </span>
                 )}
               </button>
             )}
@@ -273,10 +331,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Admin Navigation Tabs (Only when Admin is active) */}
-        {currentRole === 'admin' && onTabChange && (
+        {/* Navigation Tabs (For Admin and Data Entry) */}
+        {activeNavTabs.length > 0 && onTabChange && (
           <nav className="border-t border-slate-100 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-            {adminTabs.map(tab => {
+            {activeNavTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (

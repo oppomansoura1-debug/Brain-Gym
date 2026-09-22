@@ -176,6 +176,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               )}
             </button>
           </form>
+
+          {/* Quick Account Switcher for convenience */}
+          <div className="mt-6 pt-4 border-t border-slate-800/80">
+            <span className="block text-[11px] font-bold text-slate-400 mb-2.5 text-center">
+              حسابات الدخول السريع:
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIdentifier('Hanan');
+                  setPassword('123456');
+                }}
+                className="p-2 bg-slate-800/60 hover:bg-slate-800 text-slate-200 border border-slate-700/70 rounded-xl text-[11px] font-bold transition flex flex-col items-center gap-0.5 cursor-pointer"
+              >
+                <span className="text-indigo-400 font-extrabold">Hanan (Admin)</span>
+                <span className="text-[10px] text-slate-400 font-mono">123456</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIdentifier('Aya');
+                  setPassword('123456');
+                }}
+                className="p-2 bg-slate-800/60 hover:bg-slate-800 text-slate-200 border border-slate-700/70 rounded-xl text-[11px] font-bold transition flex flex-col items-center gap-0.5 cursor-pointer"
+              >
+                <span className="text-emerald-400 font-extrabold">Aya (مدخل بيانات)</span>
+                <span className="text-[10px] text-slate-400 font-mono">123456</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Security badge */}

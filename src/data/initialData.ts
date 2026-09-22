@@ -10,7 +10,9 @@ import {
   FinancialTransaction, 
   SystemNotification, 
   CenterSettings,
-  AuditLog
+  AuditLog,
+  ChatMessage,
+  CalendarTask
 } from '../types';
 
 export const INITIAL_USERS: User[] = [
@@ -22,6 +24,24 @@ export const INITIAL_USERS: User[] = [
     password: 'admin123@password',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  },
+  {
+    id: 'user_admin_hanan',
+    name: 'Hanan',
+    email: 'hanan@braingym-center.eg',
+    username: 'Hanan',
+    password: '123456',
+    role: 'admin',
+    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+  },
+  {
+    id: 'user_data_entry_aya',
+    name: 'Aya',
+    email: 'aya@braingym-center.eg',
+    username: 'Aya',
+    password: '123456',
+    role: 'data_entry',
+    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
   },
   {
     id: 'user_data_entry',
@@ -1086,3 +1106,94 @@ export const INITIAL_GROUPS: EducationalGroup[] = [
     createdAt: '2026-09-01',
   }
 ];
+
+export const INITIAL_MESSAGES: ChatMessage[] = [
+  {
+    id: 'msg_1',
+    senderId: 'user_admin_hanan',
+    senderName: 'Hanan (الإدارة)',
+    senderRole: 'admin',
+    senderAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    recipientId: 'all',
+    recipientName: 'فريق العمل بالكامل',
+    text: 'أهلاً بالجميع، تم تحديث جداول مجموعات المراجعة النهائية لجميع المراحل. برجاء التنسيق مع المعلمين وتسجيل الحضور بدقة.',
+    timestamp: '2026-09-17T08:30:00.000Z',
+    readBy: ['user_admin_hanan', 'user_data_entry_aya']
+  },
+  {
+    id: 'msg_2',
+    senderId: 'user_data_entry_aya',
+    senderName: 'Aya (مدخل بيانات)',
+    senderRole: 'data_entry',
+    senderAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    recipientId: 'user_admin_hanan',
+    recipientName: 'Hanan (الإدارة)',
+    text: 'صباح الخير أ/ حنان، قمت بإدخال بيانات 12 طالباً جديداً في المرحلة الإعدادية، وأرفقت كشف توزيع القاعات.',
+    timestamp: '2026-09-17T09:15:00.000Z',
+    readBy: ['user_data_entry_aya', 'user_admin_hanan']
+  },
+  {
+    id: 'msg_3',
+    senderId: 'user_admin_hanan',
+    senderName: 'Hanan (الإدارة)',
+    senderRole: 'admin',
+    senderAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    recipientId: 'user_data_entry_aya',
+    recipientName: 'Aya (مدخل بيانات)',
+    text: 'ممتاز جداً يا آية، برجاء التأكد أيضاً من إرسال إشعارات التذكير بمواعيد حصص اليوم للمجموعات المسائية.',
+    timestamp: '2026-09-17T09:20:00.000Z',
+    readBy: ['user_admin_hanan', 'user_data_entry_aya']
+  }
+];
+
+export const INITIAL_CALENDAR_TASKS: CalendarTask[] = [
+  {
+    id: 'task_1',
+    title: 'تسجيل وتأكيد حضور طلاب الفترة المسائية',
+    description: 'تسجيل الحضور لمجموعات الرياضيات والفيزياء وإرسال رسائل التنبيه لأولياء أمور الغائبين.',
+    date: '2026-09-17',
+    time: '18:00',
+    priority: 'high',
+    category: 'attendance',
+    createdBy: 'user_admin_hanan',
+    createdByName: 'Hanan',
+    assignedTo: 'user_data_entry_aya',
+    assignedToName: 'Aya (مدخل بيانات)',
+    completed: false,
+    reminderMinutesBefore: 15,
+    reminded: false
+  },
+  {
+    id: 'task_2',
+    title: 'إدخال درجات اختبار مادة الرياضيات الأسبوعي',
+    description: 'رصد درجات طلاب الصف الثالث الإعدادي لإصدار التقارير الأكاديمية الشهرية.',
+    date: '2026-09-18',
+    time: '14:30',
+    priority: 'medium',
+    category: 'exam',
+    createdBy: 'user_admin_hanan',
+    createdByName: 'Hanan',
+    assignedTo: 'all',
+    assignedToName: 'الجميع',
+    completed: false,
+    reminderMinutesBefore: 30,
+    reminded: false
+  },
+  {
+    id: 'task_3',
+    title: 'مراجعة طلبات الانضمام الجديدة والتسكين في المجموعات',
+    description: 'توزيع الطلاب الجدد وفق السعة الاستيعابية لكل قاعة.',
+    date: '2026-09-19',
+    time: '11:00',
+    priority: 'low',
+    category: 'admin',
+    createdBy: 'user_admin_hanan',
+    createdByName: 'Hanan',
+    assignedTo: 'user_data_entry_aya',
+    assignedToName: 'Aya',
+    completed: false,
+    reminderMinutesBefore: 0,
+    reminded: false
+  }
+];
+

@@ -23,6 +23,7 @@ interface StudentsManagementViewProps {
   onUpdateStudent: (student: Student) => void;
   onDeleteStudent: (studentId: string) => void;
   onPayForStudent: (studentId: string) => void;
+  hideFinancials?: boolean;
 }
 
 export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
@@ -32,6 +33,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   onUpdateStudent,
   onDeleteStudent,
   onPayForStudent,
+  hideFinancials = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStage, setSelectedStage] = useState('all');
@@ -44,6 +46,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const [formPhone, setFormPhone] = useState('');
   const [formParentName, setFormParentName] = useState('');
   const [formParentPhone, setFormParentPhone] = useState('');
+  const [formMonthlyFee, setFormMonthlyFee] = useState<number>(300);
   const [formNotes, setFormNotes] = useState('');
 
   const openAddModal = () => {
@@ -53,6 +56,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     setFormPhone('');
     setFormParentName('');
     setFormParentPhone('');
+    setFormMonthlyFee(300);
     setFormNotes('');
     setShowAddModal(true);
   };
@@ -64,6 +68,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     setFormPhone(std.phone);
     setFormParentName(std.parentName);
     setFormParentPhone(std.parentPhone);
+    setFormMonthlyFee(std.monthlyFee || 300);
     setFormNotes(std.notes || '');
     setShowAddModal(true);
   };
@@ -87,6 +92,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         phone: formPhone,
         parentName: formParentName,
         parentPhone: formParentPhone,
+        monthlyFee: Number(formMonthlyFee) >= 0 ? Number(formMonthlyFee) : editingStudent.monthlyFee,
         notes: formNotes,
       };
       onUpdateStudent(updated);
@@ -103,7 +109,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         parentPhone: formParentPhone,
         enrollmentDate: new Date().toISOString().split('T')[0],
         status: 'active',
-        monthlyFee: 0,
+        monthlyFee: Number(formMonthlyFee) >= 0 ? Number(formMonthlyFee) : 0,
         balance: 0,
         attendanceRate: 100,
         averageScore: 90,
@@ -204,7 +210,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                 <th className="p-3.5">الطالب والكود</th>
                 <th className="p-3.5">المرحلة والصف</th>
                 <th className="p-3.5">أرقام التواصل</th>
-                <th className="p-3.5">الاشتراك والوضع المالي</th>
+                {!hideFinancials && <th className="p-3.5">الاشتراك والوضع المالي</th>}
                 <th className="p-3.5">الحضور والأداء</th>
                 <th className="p-3.5 text-center">إجراءات سريعة</th>
               </tr>
@@ -212,7 +218,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-slate-400">
+                  <td colSpan={hideFinancials ? 5 : 6} className="text-center py-10 text-slate-400">
                     لا توجد بيانات مطابقة لخيارات البحث المحددة
                   </td>
                 </tr>
@@ -256,23 +262,25 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       </div>
                     </td>
 
-                    {/* Finance */}
-                    <td className="p-3.5">
-                      <div className="text-slate-900 font-semibold">
-                        {std.monthlyFee > 0 ? `${std.monthlyFee} ج.م / شهر` : 'حسب المواد المسجلة'}
-                      </div>
-                      {std.balance < 0 ? (
-                        <div className="inline-flex items-center gap-1 text-[11px] text-rose-600 font-bold mt-0.5">
-                          <AlertCircle className="w-3 h-3" />
-                          <span>مستحق: {Math.abs(std.balance)} ج.م</span>
+                    {/* Finance (Hidden for data entry) */}
+                    {!hideFinancials && (
+                      <td className="p-3.5">
+                        <div className="text-slate-900 font-semibold">
+                          {std.monthlyFee > 0 ? `${std.monthlyFee} ج.م / شهر` : 'حسب المواد المسجلة'}
                         </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-bold mt-0.5">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>مسدد بالكامل</span>
-                        </div>
-                      )}
-                    </td>
+                        {std.balance < 0 ? (
+                          <div className="inline-flex items-center gap-1 text-[11px] text-rose-600 font-bold mt-0.5">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>مستحق: {Math.abs(std.balance)} ج.م</span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-bold mt-0.5">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>مسدد بالكامل</span>
+                          </div>
+                        )}
+                      </td>
+                    )}
 
                     {/* Attendance & Score */}
                     <td className="p-3.5">
@@ -291,13 +299,15 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                     {/* Actions */}
                     <td className="p-3.5 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => onPayForStudent(std.id)}
-                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition cursor-pointer"
-                          title="تحصيل وسداد إلكتروني"
-                        >
-                          <CreditCard className="w-4 h-4" />
-                        </button>
+                        {!hideFinancials && (
+                          <button
+                            onClick={() => onPayForStudent(std.id)}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition cursor-pointer"
+                            title="تحصيل وسداد إلكتروني"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                          </button>
+                        )}
 
                         <button
                           onClick={() => openEditModal(std)}
@@ -412,6 +422,19 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                     className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white font-mono"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">الاشتراك الشهري للطالب (ج.م):</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={formMonthlyFee}
+                  onChange={(e) => setFormMonthlyFee(Number(e.target.value))}
+                  placeholder="300"
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white font-mono"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">تحديد الاشتراك المالي للطالب أثناء تسجيل أو تعديل البيانات</p>
               </div>
 
               <div>

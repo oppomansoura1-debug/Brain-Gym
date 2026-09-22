@@ -27,6 +27,7 @@ interface StagesAndSubjectsViewProps {
   onDeleteStage?: (stageId: string) => void;
   onUpdateSubject?: (subject: Subject) => void;
   onDeleteSubject?: (subjectId: string) => void;
+  hideFinancials?: boolean;
 }
 
 const PRESET_MAIN_STAGES = [
@@ -58,6 +59,7 @@ export const StagesAndSubjectsView: React.FC<StagesAndSubjectsViewProps> = ({
   onDeleteStage,
   onUpdateSubject,
   onDeleteSubject,
+  hideFinancials = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'stages' | 'subjects'>('stages');
   const [stagesViewMode, setStagesViewMode] = useState<'table' | 'cards'>('table');
@@ -718,9 +720,11 @@ export const StagesAndSubjectsView: React.FC<StagesAndSubjectsViewProps> = ({
                           {sub.mainStage}
                         </span>
                       )}
-                      <span className="text-xs font-bold text-slate-900">
-                        {sub.monthlyFee} ج.م / شهر
-                      </span>
+                      {!hideFinancials && (
+                        <span className="text-xs font-bold text-slate-900">
+                          {sub.monthlyFee} ج.م / شهر
+                        </span>
+                      )}
                     </div>
                   </div>
 

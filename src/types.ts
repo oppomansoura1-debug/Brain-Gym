@@ -183,7 +183,9 @@ export type NotificationType =
   | 'backup_success'
   | 'security_event'
   | 'payment_received'
-  | 'system_info';
+  | 'system_info'
+  | 'task_reminder'
+  | 'chat_message';
 
 export interface SystemNotification {
   id: string;
@@ -233,4 +235,38 @@ export interface CenterSettings {
   fawryMerchantCode: string;
   vodafoneCashWallet: string;
   instapayHandle: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  senderAvatar?: string;
+  recipientId: string; // 'all' or specific user ID
+  recipientName?: string;
+  text?: string;
+  imageUrl?: string;
+  audioUrl?: string; // base64 or audio blob data URL
+  audioDurationSeconds?: number;
+  timestamp: string; // ISO string
+  readBy?: string[]; // user IDs
+}
+
+export interface CalendarTask {
+  id: string;
+  title: string;
+  description?: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm (e.g. "10:30")
+  priority: 'low' | 'medium' | 'high';
+  category: 'exam' | 'attendance' | 'fees' | 'parent_call' | 'admin' | 'general';
+  createdBy: string;
+  createdByName: string;
+  assignedTo: string; // 'all' or userId
+  assignedToName?: string;
+  completed: boolean;
+  completedAt?: string;
+  reminderMinutesBefore?: number; // 0 (at time), 15, 30, 60
+  reminded?: boolean;
 }

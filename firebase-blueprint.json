@@ -88,6 +88,38 @@
         "date": { "type": "string", "description": "Date" }
       },
       "required": ["id", "amount", "type"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Internal team chat message (text, image, audio)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Message ID" },
+        "senderId": { "type": "string", "description": "Sender User ID" },
+        "senderName": { "type": "string", "description": "Sender name" },
+        "senderRole": { "type": "string", "description": "Sender role" },
+        "recipientId": { "type": "string", "description": "Recipient User ID or all" },
+        "text": { "type": "string", "description": "Text message content" },
+        "imageUrl": { "type": "string", "description": "Base64 or URL image" },
+        "audioUrl": { "type": "string", "description": "Base64 or URL voice recording" },
+        "timestamp": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "senderId", "senderName", "timestamp"]
+    },
+    "CalendarTask": {
+      "title": "CalendarTask",
+      "description": "Synchronized task with scheduled reminder",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Task ID" },
+        "title": { "type": "string", "description": "Task title" },
+        "date": { "type": "string", "description": "Target date YYYY-MM-DD" },
+        "time": { "type": "string", "description": "Target time HH:mm" },
+        "priority": { "type": "string", "description": "low, medium, high" },
+        "category": { "type": "string", "description": "Category" },
+        "completed": { "type": "boolean", "description": "Completion status" }
+      },
+      "required": ["id", "title", "date"]
     }
   },
   "firestore": {
@@ -114,6 +146,14 @@
     "/transactions/{transactionId}": {
       "schema": "Transaction",
       "description": "Financial transactions collection"
+    },
+    "/internal_messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Internal team chat messages"
+    },
+    "/calendar_tasks/{taskId}": {
+      "schema": "CalendarTask",
+      "description": "Synchronized calendar tasks and reminders"
     }
   }
 }

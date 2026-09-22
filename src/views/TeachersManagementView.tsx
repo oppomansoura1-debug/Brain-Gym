@@ -24,6 +24,7 @@ interface TeachersManagementViewProps {
   onUpdateTeacher: (teacher: Teacher) => void;
   onDeleteTeacher: (teacherId: string) => void;
   onRecordTeacherPayout: (transaction: FinancialTransaction) => void;
+  hideFinancials?: boolean;
 }
 
 const DEFAULT_MAIN_STAGES = [
@@ -80,6 +81,7 @@ export const TeachersManagementView: React.FC<TeachersManagementViewProps> = ({
   onUpdateTeacher,
   onDeleteTeacher,
   onRecordTeacherPayout,
+  hideFinancials = false,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
@@ -454,7 +456,7 @@ export const TeachersManagementView: React.FC<TeachersManagementViewProps> = ({
                   <div>
                     <span className="text-slate-500 block mb-1.5 font-bold flex items-center gap-1">
                       <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>المواد والمراحل والصفوف والأسعار الشهرية:</span>
+                      <span>{hideFinancials ? 'المواد والمراحل والصفوف المكلف بها:' : 'المواد والمراحل والصفوف والأسعار الشهرية:'}</span>
                     </span>
                     <div className="flex flex-col gap-1.5">
                       {teacher.stages && teacher.stages.length > 0 ? (
@@ -462,13 +464,14 @@ export const TeachersManagementView: React.FC<TeachersManagementViewProps> = ({
                           const parts = stg.split(' - ');
                           const subName = parts[0];
                           const rest = parts.slice(1).join(' - ');
+                          const displayRest = hideFinancials ? (rest || stg).replace(/\s*-\s*سعر المادة بالشهر:[^]*$/, '') : (rest || stg);
                           return (
                             <div key={i} className="text-[11px] font-semibold bg-indigo-50/90 text-indigo-950 border border-indigo-200/80 p-2 rounded-lg flex items-center justify-between gap-1.5">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="bg-indigo-600 text-white text-[10px] font-black px-2 py-0.5 rounded">
                                   {subName}
                                 </span>
-                                <span className="text-slate-700 font-bold">{rest || stg}</span>
+                                <span className="text-slate-700 font-bold">{displayRest}</span>
                               </div>
                             </div>
                           );
@@ -493,16 +496,18 @@ export const TeachersManagementView: React.FC<TeachersManagementViewProps> = ({
                   <span>واتساب</span>
                 </a>
 
-                <button
-                  onClick={() => {
-                    setSelectedTeacherForPayout(teacher);
-                    setPayoutAmount(5000);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition cursor-pointer"
-                >
-                  <CreditCard className="w-3.5 h-3.5" />
-                  <span>صرف المستحقات</span>
-                </button>
+                {!hideFinancials && (
+                  <button
+                    onClick={() => {
+                      setSelectedTeacherForPayout(teacher);
+                      setPayoutAmount(5000);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>صرف المستحقات</span>
+                  </button>
+                )}
               </div>
 
             </div>
